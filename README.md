@@ -48,7 +48,7 @@ The API server will be running at `http://localhost:3000`.
 | POST   | /tournaments/:id/participants          | Add a member to a tournament                       |
 | POST   | /tournaments/:id/generate_matches      | Generate matches for a tournament                  |
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
-| PUT    | /matches/:id                           | Update a match (set the winner)                    |
+| PUT    | /tournaments/:id/matches/:id           | Update a match (set the winner)                    |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
 
 ## Bracket Visualization
