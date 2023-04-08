@@ -1,0 +1,13 @@
+create a javascript REST API. This API will facilitate creating and managing Tournaments, Participants, and Matches. Data should be stored in an SQLite database. Support the following features:
+- create new members. members participate in tournaments.
+- create single elimination tournaments. members may opt to participate in tournaments.
+- generate matches
+- generate bracket graphic
+- track member ELO score across matches and tournaments.
+
+Perform these actions one at a time. I will prompt for the next action by saying, "next action"
+Describe the database schema and produce a script to generate it.
+Describe the API endpoints that will comprise this service.
+Produce a Swagger document that will call the endpoints described.
+Outline the files necessary to achieve our goal.
+I will then prompt you to produce each file.

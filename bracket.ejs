@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournament Bracket</title>
+    <style>
+        /* Add your custom CSS styles for the bracket here */
+    </style>
+</head>
+<body>
+    <h1>Tournament Bracket</h1>
+    <ul>
+        <% matches.matches.forEach(function(match) { %>
+            <li>
+                <p>Match <%= match.id %>: <%= match.participant1_id %> vs. <%= match.participant2_id %></p>
+            </li>
+        <% }); %>
+    </ul>
+</body>
+</html>

@@ -1,0 +1,228 @@
+openapi: 3.0.0
+info:
+  title: Tournament Management API
+  version: 1.0.0
+paths:
+  /members:
+    post:
+      summary: Create a new member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: New member created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  elo_score:
+                    type: integer
+
+    get:
+      summary: Get a list of all members
+      responses:
+        '200':
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    elo_score:
+                      type: integer
+
+  /tournaments:
+    post:
+      summary: Create a new single elimination tournament
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum:
+                    - single_elimination
+      responses:
+        '200':
+          description: New tournament created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  type:
+                    type: string
+
+  /tournaments/{id}/participants:
+    post:
+      summary: Add a member to a tournament as a participant
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                member_id:
+                  type: integer
+      responses:
+        '200':
+          description: New participant added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  member_id:
+                    type: integer
+                  tournament_id:
+                    type: integer
+
+    get:
+      summary: Get a list of participants in a tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: List of participants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    member_id:
+                      type: integer
+                    tournament_id:
+                      type: integer
+
+  /tournaments/{id}/generate_matches:
+    post:
+      summary: Generate matches for a single elimination tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Matches generated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    tournament_id:
+                      type: integer
+                    round:
+                      type: integer
+                    participant1_id:
+                      type: integer
+                    participant2_id:
+                      type: integer
+                    winner_id:
+                      type: integer
+
+  /tournaments/{id}/bracket:
+    get:
+      summary: Generate a bracket graphic for the tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Bracket graphic generated
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+                format: binary
+
+  /matches/{id}:
+    put:
+      summary: Update a match result and update participant ELO scores
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                winner_id:
+                  type: integer
+      responses:
+        '200':
+          description: Match result updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  tournament_id:
+                    type: integer
+                  round:
+                    type: integer
+                  participant1_id:
+                    type: integer
+                  participant2_id:
+                    type: integer
+                  winner_id:
+                    type: integer

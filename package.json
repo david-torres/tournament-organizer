@@ -1,0 +1,30 @@
+{
+  "name": "tournament-management-api",
+  "version": "1.0.0",
+  "description": "A REST API for creating and managing Tournaments, Participants, and Matches.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^7.6.0",
+    "body-parser": "^1.19.0",
+    "ejs": "^3.1.9",
+    "express": "^4.17.1",
+    "html2canvas": "^1.4.1",
+    "jsdom": "^21.1.1",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.3",
+    "path": "^0.12.7",
+    "sqlite3": "^5.0.2"
+  },
+  "keywords": [
+    "tournament",
+    "api",
+    "rest",
+    "elo",
+    "bracket"
+  ],
+  "author": "",
+  "license": "ISC"
+}
