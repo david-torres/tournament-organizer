@@ -27,7 +27,7 @@ exports.getMembers = (req, res, db) => {
   });
 };
 
-exports.searchMembers = async(req, res, db) => {
+exports.searchMembers = async (req, res, db) => {
   const { name } = req.query;
 
   try {
@@ -35,7 +35,7 @@ exports.searchMembers = async(req, res, db) => {
       if (err) {
         res.status(500).json({ error: err.message });
       } else {
-        res.status(200).json({"rows": rows});
+        res.status(200).json({ "rows": rows });
       }
     });
   } catch (err) {

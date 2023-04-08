@@ -74,6 +74,8 @@ async function main() {
       // No pending matches, the tournament is complete
       tournamentCompleted = true;
       break;
+    } else {
+      console.log('Advance round...');
     }
 
     // Simulate the matches and update winners
@@ -82,7 +84,6 @@ async function main() {
       await updateMatch(tournamentId, match.id, winnerId);
       console.log(`Match ${match.id} completed. Winner: ${winnerId}`);
     }
-    console.log('Advance round...');
   }
 
   console.log('Tournament completed');
