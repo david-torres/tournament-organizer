@@ -1,4 +1,4 @@
-# Tournament Management API
+# Tournament Organizer API
 
 A REST API for creating and managing single-elimination tournaments, participants, and matches, with support for ELO ratings and bracket visualization.
 
@@ -51,7 +51,7 @@ The API server will be running at `http://localhost:3000`.
 | PUT    | /tournaments/:id/matches/:id           | Update a match (set the winner)                    |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
 
-## Bracket Visualization
+## Bracket Visualization [TODO]
 
 To visualize the bracket of a tournament, open `bracket.html` in your browser, and update the `API_BASE_URL` and `tournamentId` variables in `bracket.js` to match your API server and desired tournament ID.
 
