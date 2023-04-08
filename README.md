@@ -22,7 +22,7 @@ A REST API for creating and managing single-elimination tournaments, participant
 
 1. Clone the repository:
 
-    git clone https://github.com/yourusername/tournament-management-api.git
+    git clone https://github.com/david-torres/tournament-organizer.git
     cd tournament-management-api
 
 2. Install dependencies:
