@@ -45,7 +45,7 @@ module.exports = (sequelize, DataTypes) => {
     freezeTableName: true
   });
 
-  Match.associate = function (models) {
+  Match.associate = models => {
     Match.belongsTo(models.Tournament, {
       foreignKey: 'tournamentId',
       onDelete: 'CASCADE',

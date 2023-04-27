@@ -18,12 +18,11 @@ async function createMemberIfNotExists(name) {
 }
 
 function displayMatchResults(matches) {
-  console.log(matches);
   console.log('\nMatch results:');
   console.log('------------------------------------');
   matches.forEach((match) => {
     console.log(
-      `Match ID: ${match.id} | ${match.player1.Member.name} (${match.player1.Member.elo}) vs ${match.player2.Member.name} (${match.player2.Member.elo}) | Winner: ${match.winner.Member.name} (${match.winner.Member.elo})`
+      `Match ID: ${match.id} | ${match.player1.Member.name} vs ${match.player2.Member.name} | Winner: ${match.winner.Member.name} (${match.winner.Member.elo})`
     );
   });
   console.log('------------------------------------\n');

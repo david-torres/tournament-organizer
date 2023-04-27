@@ -12,6 +12,7 @@ const sequelize = new Sequelize({
 });
 
 const models = {
+  sequelize,
   Member: MemberModel(sequelize, Sequelize),
   Tournament: TournamentModel(sequelize, Sequelize),
   Participant: ParticipantModel(sequelize, Sequelize),
@@ -27,10 +28,4 @@ Object.keys(models).forEach((modelName) => {
 
 sequelize.sync();
 
-module.exports = {
-  sequelize,
-  Member: models.Member,
-  Tournament: models.Tournament,
-  Participant: models.Participant,
-  Match: models.Match,
-};
+module.exports = models;
