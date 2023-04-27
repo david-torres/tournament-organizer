@@ -206,7 +206,9 @@ exports.updateMatch = async (req, res) => {
       include: [{ model: Member, as: 'Member' }],
     });
 
-    const [newElo1, newElo2] = calculateUpdatedElo(participant1.Member.elo, participant2.Member.elo, winnerId === match.player1Id ? 1 : 0);
+    const actualScore1 = winnerId === participant1.id ? 1 : 0;
+    const actualScore2 = 1 - actualScore1;
+    const [newElo1, newElo2] = calculateUpdatedElo(participant1.Member.elo, participant2.Member.elo, actualScore1, actualScore2);
 
     await match.update({ winnerId });
     await participant1.Member.update({ elo: newElo1 });

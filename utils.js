@@ -7,12 +7,12 @@ function calculateExpectedScore(ratingA, ratingB) {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
 
-exports.calculateUpdatedElo = (eloA, eloB) => {
+exports.calculateUpdatedElo = (eloA, eloB, actualScoreA, actualScoreB) => {
   const expectedScoreA = calculateExpectedScore(eloA, eloB);
   const expectedScoreB = calculateExpectedScore(eloB, eloA);
 
-  const newEloA = eloA + K_FACTOR * (1 - expectedScoreA);
-  const newEloB = eloB + K_FACTOR * (0 - expectedScoreB);
+  const newEloA = eloA + K_FACTOR * (actualScoreA - expectedScoreA);
+  const newEloB = eloB + K_FACTOR * (actualScoreB - expectedScoreB);
 
   return [newEloA.toFixed(2), newEloB.toFixed(2)].map(parseFloat);
 };
