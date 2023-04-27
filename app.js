@@ -1,27 +1,28 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
 const morgan = require('morgan');
 const config = require('./config');
 const routes = require('./routes');
+const { sequelize } = require('./models/index');
 
 const app = express();
-const db = new sqlite3.Database(config.DATABASE_URL);
 
 app.use(morgan('combined'))
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Register routes
-routes(app, db);
+routes(app);
 
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+sequelize.authenticate()
+    .then(() => {
+        console.log('Connection to the database has been established successfully.');
+        app.listen(config.PORT, () => {
+            console.log(`Tournament management API is running on port ${config.PORT}`);
+        });
+    })
+    .catch((error) => {
+        console.error('Unable to connect to the database:', error);
+    });
 
-// Close the database connection on exit
-process.on('exit', () => {
-    db.close();
-});
+module.exports = app;

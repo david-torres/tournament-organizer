@@ -14,27 +14,7 @@ exports.calculateUpdatedElo = (eloA, eloB) => {
   const newEloA = eloA + K_FACTOR * (1 - expectedScoreA);
   const newEloB = eloB + K_FACTOR * (0 - expectedScoreB);
 
-  return [newEloA, newEloB];
-};
-
-exports.shuffleArray = (array) => {
-  let currentIndex = array.length;
-  let temporaryValue;
-  let randomIndex;
-
-  // While there remain elements to shuffle
-  while (currentIndex !== 0) {
-    // Pick a remaining element
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex -= 1;
-
-    // Swap it with the current element
-    temporaryValue = array[currentIndex];
-    array[currentIndex] = array[randomIndex];
-    array[randomIndex] = temporaryValue;
-  }
-
-  return array;
+  return [newEloA.toFixed(2), newEloB.toFixed(2)].map(parseFloat);
 };
 
 // TODO: fix this...

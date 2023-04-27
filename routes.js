@@ -9,6 +9,11 @@ module.exports = function (app, db) {
 
   // Tournaments
   app.post('/tournaments', (req, res) => tournamentController.createTournament(req, res, db));
+  app.get('/tournaments/latest', (req, res) => tournamentController.getLatestTournament(req, res, db));
+  app.post('/tournaments/:id/start', (req, res) => tournamentController.startTournament(req, res, db));
+
+  // Bracket
+  app.get('/tournaments/:id/bracket', (req, res) => tournamentController.getBracket(req, res, db));
 
   // Participants
   app.post('/tournaments/:id/participants', (req, res) => tournamentController.addParticipant(req, res, db));
@@ -16,9 +21,5 @@ module.exports = function (app, db) {
 
   // Matches
   app.get('/tournaments/:id/matches', (req, res) => tournamentController.getMatches(req, res, db));
-  app.post('/tournaments/:id/generate_matches', (req, res) => tournamentController.generateMatches(req, res, db));
-  app.put('/tournaments/:id/matches/:match_id', (req, res) => tournamentController.updateMatch(req, res, db));
-
-  // Bracket
-  app.get('/tournaments/:id/bracket', (req, res) => tournamentController.getBracket(req, res, db));
+  app.patch('/tournaments/:id/matches/:match_id', (req, res) => tournamentController.updateMatch(req, res, db));
 };

@@ -1,9 +1,9 @@
-const Sequelize = require('sequelize');
-const config = require('./config');
-const MemberModel = require('./models/member');
-const TournamentModel = require('./models/tournament');
-const ParticipantModel = require('./models/participant');
-const MatchModel = require('./models/match');
+const { Sequelize } = require('sequelize');
+const MemberModel = require('./member');
+const TournamentModel = require('./tournament');
+const ParticipantModel = require('./participant');
+const MatchModel = require('./match');
+const config = require('../config');
 
 const sequelize = new Sequelize(config.DB_NAME, config.DB_USERNAME, config.DB_PASSWORD, {
   host: config.DB_HOST,
@@ -12,6 +12,7 @@ const sequelize = new Sequelize(config.DB_NAME, config.DB_USERNAME, config.DB_PA
 });
 
 const models = {
+  sequelize,
   Member: MemberModel(sequelize, Sequelize),
   Tournament: TournamentModel(sequelize, Sequelize),
   Participant: ParticipantModel(sequelize, Sequelize),
@@ -25,10 +26,6 @@ Object.keys(models).forEach((modelName) => {
   }
 });
 
-sequelize.sync({ force: true })
-  .then(() => {
-    console.log('Database initialized successfully.');
-  })
-  .catch((error) => {
-    console.error('Error initializing database:', error);
-  });
+sequelize.sync();
+
+module.exports = models;
