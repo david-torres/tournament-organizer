@@ -1,45 +1,36 @@
+// Imports
+const { Member } = require('../models');
+
 // Create a new member
-exports.createMember = async (req, res, db) => {
+exports.createMember = async (req, res) => {
   const { name } = req.body;
   const elo_score = 1200;
 
   try {
-    await db.run('INSERT INTO members (name, elo_score) VALUES (?, ?)', [name, elo_score], function (err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      res.status(200).json({ id: this.lastID, name, elo_score });
-    });
+    const newMember = await Member.create({ name, elo_score });
+    res.status(200).json(newMember);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
 // Get a list of all members
-exports.getMembers = (req, res, db) => {
-  db.all('SELECT * FROM members', [], (err, rows) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
-    }
-    res.status(200).json(rows);
-  });
-};
-
-exports.searchMembers = async (req, res, db) => {
-  const { name } = req.query;
-
+exports.getMembers = async (req, res) => {
   try {
-    db.all('SELECT * FROM members WHERE name = ?', [name], (err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.status(200).json({ "rows": rows });
-      }
-    });
+    const members = await Member.findAll();
+    res.status(200).json(members);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+};
 
-}
+exports.searchMembers = async (req, res) => {
+  const { name } = req.query;
+
+  try {
+    const members = await Member.findAll({ where: { name } });
+    res.status(200).json({ "rows": members });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

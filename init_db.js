@@ -1,29 +1,34 @@
-const fs = require('fs');
-const sqlite3 = require('sqlite3').verbose();
-const { DATABASE_URL } = require('./config');
+const Sequelize = require('sequelize');
+const config = require('./config');
+const MemberModel = require('./models/member');
+const TournamentModel = require('./models/tournament');
+const ParticipantModel = require('./models/participant');
+const MatchModel = require('./models/match');
 
-const schema = fs.readFileSync('./database.sql', 'utf8');
+const sequelize = new Sequelize(config.DB_NAME, config.DB_USERNAME, config.DB_PASSWORD, {
+  host: config.DB_HOST,
+  dialect: config.DB_DIALECT,
+  storage: config.DB_STORAGE,
+});
 
-const db = new sqlite3.Database(DATABASE_URL, (err) => {
-  if (err) {
-    console.error(err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
+const models = {
+  Member: MemberModel(sequelize, Sequelize),
+  Tournament: TournamentModel(sequelize, Sequelize),
+  Participant: ParticipantModel(sequelize, Sequelize),
+  Match: MatchModel(sequelize, Sequelize),
+}
+
+// Set up associations
+Object.keys(models).forEach((modelName) => {
+  if (models[modelName].associate) {
+    models[modelName].associate(models);
   }
 });
 
-db.exec(schema, (err) => {
-  if (err) {
-    console.error(err.message);
-  } else {
-    console.log('Database schema successfully loaded.');
-  }
-});
-
-db.close((err) => {
-  if (err) {
-    console.error(err.message);
-  } else {
-    console.log('Closed the database connection.');
-  }
-});
+sequelize.sync({ force: true })
+  .then(() => {
+    console.log('Database initialized successfully.');
+  })
+  .catch((error) => {
+    console.error('Error initializing database:', error);
+  });
