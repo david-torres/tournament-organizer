@@ -5,7 +5,7 @@ const ParticipantModel = require('./participant');
 const MatchModel = require('./match');
 const config = require('../config');
 
-const sequelize = new Sequelize({
+const sequelize = new Sequelize(config.DB_NAME, config.DB_USERNAME, config.DB_PASSWORD, {
   host: config.DB_HOST,
   dialect: config.DB_DIALECT,
   storage: config.DB_STORAGE,
