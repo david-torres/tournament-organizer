@@ -1,6 +1,6 @@
 const ejs = require('ejs');
 const path = require('path');
-const { Op } = require('sequelize');
+const { Op, UniqueConstraintError } = require('sequelize');
 const { Tournament, Participant, Match, Member } = require('../models');
 const { calculateUpdatedElo } = require('../utils');
 
@@ -10,33 +10,38 @@ exports.createTournament = async (req, res) => {
     const newTournament = await Tournament.create(req.body);
     res.status(201).json(newTournament);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (error instanceof UniqueConstraintError) {
+      res.status(409).json({ error: 'Tournament must have a unique name' });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   }
 };
 
 // Add a participant to a tournament
 exports.addParticipant = async (req, res) => {
-  const memberId = req.body.member_id;
-  const tournamentId = req.params.id;
-
   try {
-    const tournament = await Tournament.findByPk(tournamentId);
-    if (tournament) {
-      const member = await Member.findByPk(memberId);
-      if (member) {
-        const participant = await Participant.create({
-          tournamentId,
-          memberId,
-        });
-        res.status(201).json(participant);
-      } else {
-        res.status(404).json({ error: 'Member not found' });
-      }
-    } else {
-      res.status(404).json({ error: 'Tournament not found' });
+    const memberId = req.body.member_id;
+    const tournamentId = req.params.id;
+
+    if (!memberId || !tournamentId) {
+      return res.status(400).json({ error: 'IDs not set' });
     }
+
+    const tournament = await Tournament.findByPk(tournamentId);
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    await Participant.create({ memberId, tournamentId });
+    res.status(201).json({ message: 'Participant added to the tournament' });
+
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (error instanceof UniqueConstraintError) {
+      res.status(409).json({ error: 'Member is already a participant in this tournament' });
+    } else {
+      res.status(500).json({ error: 'Internal server error' });
+    }
   }
 };
 
@@ -44,11 +49,11 @@ exports.addParticipant = async (req, res) => {
 exports.getParticipants = async (req, res) => {
   try {
     const tournament = await Tournament.findByPk(req.params.id, {
-      include: [{ model: Participant, as: 'Participants', include: [{ model: Member, as: 'member' }] }],
+      include: { model: Participant, as: 'participants', include: { model: Member, as: 'member' }},
     });
 
     if (tournament) {
-      res.json(tournament.Participants);
+      res.json(tournament.participants);
     } else {
       res.status(404).json({ error: 'Tournament not found' });
     }
@@ -57,6 +62,7 @@ exports.getParticipants = async (req, res) => {
   }
 };
 
+// generate matchups, granting byes to the highest elo players if needed
 function generateMatches(participants) {
   const matches = [];
   let matchIndex = 0;
@@ -98,27 +104,35 @@ function generateMatches(participants) {
   return matches;
 }
 
-
 // Start the tournament by generating matches for a single elimination tournament with byes based on ELO scores and random match-ups
 exports.startTournament = async (req, res) => {
   try {
     const tournament = await Tournament.findByPk(req.params.id, {
-      include: [{ model: Participant, as: 'Participants' }],
+      include: { model: Participant, as: 'participants' },
     });
 
     if (tournament) {
-      if (tournament.Participants.length < 2) {
+      // Check if the tournament has already been started
+      if (tournament.status !== 'pending') {
+        return res.status(400).json({ error: 'Tournament has already been started' });
+      }
+
+      // check if we have enough players
+      if (tournament.participants.length < 2) {
         res.status(400).json({ error: 'Not enough participants to start the tournament' });
       } else {
-        const matches = generateMatches(tournament.Participants);
+        const matches = generateMatches(tournament.participants);
 
         // Insert the generated matches into the database using Sequelize
-        await Match.bulkCreate(matches.map((match) => ({
+        await Match.bulkCreate(matches.map(match => ({
           round: match.round,
           player1Id: match.player1 ? match.player1.id : null,
           player2Id: match.player2 ? match.player2.id : null,
           tournamentId: tournament.id,
         })));
+
+        // Update the tournament status to 'in_progress'
+        await tournament.update({ status: 'in_progress' });
 
         res.status(200).json({ message: 'Tournament started, matches generated' });
       }
@@ -130,6 +144,7 @@ exports.startTournament = async (req, res) => {
   }
 };
 
+// check if all matches have been completed for a round and generate new matches or complete the tournament
 const advanceRound = async (tournament) => {
   try {
     const matches = await Match.findAll({
@@ -199,20 +214,20 @@ exports.updateMatch = async (req, res) => {
 
     const participant1 = await Participant.findOne({
       where: { id: match.player1Id },
-      include: [{ model: Member, as: 'Member' }],
+      include: { model: Member, as: 'member' },
     });
     const participant2 = await Participant.findOne({
       where: { id: match.player2Id },
-      include: [{ model: Member, as: 'Member' }],
+      include: { model: Member, as: 'member' },
     });
 
     const actualScore1 = winnerId === participant1.id ? 1 : 0;
     const actualScore2 = 1 - actualScore1;
-    const [newElo1, newElo2] = calculateUpdatedElo(participant1.Member.elo, participant2.Member.elo, actualScore1, actualScore2);
+    const [newElo1, newElo2] = calculateUpdatedElo(participant1.member.elo, participant2.member.elo, actualScore1, actualScore2);
 
     await match.update({ winnerId });
-    await participant1.Member.update({ elo: newElo1 });
-    await participant2.Member.update({ elo: newElo2 });
+    await participant1.member.update({ elo: newElo1 });
+    await participant2.member.update({ elo: newElo2 });
 
     // Call advanceRound
     await advanceRound(tournament);
@@ -224,7 +239,7 @@ exports.updateMatch = async (req, res) => {
   }
 };
 
-
+// returns match data
 function getBracketData(matches) {
   const rounds = {};
 
@@ -257,6 +272,7 @@ function getBracketData(matches) {
   return rounds;
 }
 
+// builds an html view of match data
 async function generateBracketHtml(matches) {
   const templatePath = path.join(__dirname, '..', 'bracket.ejs');
   const html = await ejs.renderFile(templatePath, { matches });
@@ -276,11 +292,11 @@ exports.getBracket = async (req, res) => {
     }
 
     const matches = await Match.findAll({
-      where: { tournamentOd: id },
+      where: { tournamentId: id },
       include: [
-        { model: Participant, as: 'player1' },
-        { model: Participant, as: 'player2' },
-        { model: Participant, as: 'winner' }
+        { model: Participant, as: 'player1', include: { model: Member, as: 'member' }},
+        { model: Participant, as: 'player2', include: { model: Member, as: 'member' }},
+        { model: Participant, as: 'winner', include: { model: Member, as: 'member' }}
       ],
       order: [['round', 'ASC'], ['id', 'ASC']]
     });
@@ -303,6 +319,7 @@ exports.getBracket = async (req, res) => {
   }
 };
 
+// fetch matches
 exports.getMatches = async (req, res) => {
   const { id } = req.params;
   const { status } = req.query;
@@ -324,9 +341,9 @@ exports.getMatches = async (req, res) => {
     const matches = await Match.findAll({
       where: matchFilter,
       include: [
-        { model: Participant, as: 'player1', include: Member },
-        { model: Participant, as: 'player2', include: Member },
-        { model: Participant, as: 'winner', include: Member },
+        { model: Participant, as: 'player1', include: { model: Member, as: 'member' }},
+        { model: Participant, as: 'player2', include: { model: Member, as: 'member' }},
+        { model: Participant, as: 'winner', include: { model: Member, as: 'member' }},
       ],
       order: [['id', 'ASC']],
     });
@@ -338,6 +355,7 @@ exports.getMatches = async (req, res) => {
   }
 }
 
+// return the latest tournament
 exports.getLatestTournament = async (req, res) => {
   try {
     const latestTournament = await Tournament.findOne({

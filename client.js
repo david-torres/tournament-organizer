@@ -13,6 +13,16 @@ async function apiCall(endpoint, method = 'GET', body = null) {
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+  
+  // Check if the response status code indicates an error.
+  if (!response.ok) {
+    const json = await response.json();
+    const errorMessage = json.error || 'An error occurred';
+    const error = new Error(errorMessage);
+    error.status = response.status;
+    throw error;
+  }
+
   const result = await response.json();
   return result;
 }

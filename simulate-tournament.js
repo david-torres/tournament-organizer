@@ -7,8 +7,8 @@ async function createMemberIfNotExists(name) {
   try {
     const existingMember = await client.searchMembers(name);
 
-    if (existingMember.length > 0) {
-      return existingMember[0];
+    if ('rows' in existingMember && existingMember['rows'].length > 0) {
+      return existingMember['rows'][0];
     }
     return await client.createMember(name);
   } catch (error) {

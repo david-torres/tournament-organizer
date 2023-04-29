@@ -16,7 +16,13 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 1200,
     },
   }, {
-    freezeTableName: true
+    freezeTableName: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['name']
+      }
+    ]
   });
 
   Member.associate = models => {

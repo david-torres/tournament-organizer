@@ -20,16 +20,24 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'pending',
     },
   }, {
-    freezeTableName: true
+    freezeTableName: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['name']
+      }
+    ]
   });
 
   Tournament.associate = models => {
     Tournament.hasMany(models.Participant, {
       foreignKey: 'tournamentId',
+      as: 'participants'
     });
 
     Tournament.hasMany(models.Match, {
       foreignKey: 'tournamentId',
+      as: 'matches'
     });
   };
 

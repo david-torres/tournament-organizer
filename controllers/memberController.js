@@ -24,6 +24,7 @@ exports.getMembers = async (req, res) => {
   }
 };
 
+// search for members by name
 exports.searchMembers = async (req, res) => {
   const { name } = req.query;
 

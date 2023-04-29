@@ -22,12 +22,19 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
   }, {
-    freezeTableName: true
+    freezeTableName: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['memberId', 'tournamentId']
+      }
+    ]
   });
 
   Participant.associate = models => {
     Participant.belongsTo(models.Member, {
       foreignKey: 'memberId',
+      as: 'member'
     });
 
     Participant.belongsTo(models.Tournament, {
