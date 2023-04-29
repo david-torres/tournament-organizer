@@ -252,18 +252,18 @@ function getBracketData(matches) {
     rounds[roundNumber].push({
       id: match.id,
       round: roundNumber,
-      participant1: {
-        id: match.participant1.id,
-        name: match.participant1.name
+      player1: {
+        id: match.player1.member.id,
+        name: match.player1.member.name
       },
-      participant2: {
-        id: match.participant2.id,
-        name: match.participant2.name
+      player2: {
+        id: match.player2.member.id,
+        name: match.player2.member.name
       },
-      winner: match.winner.id
+      winner: match.winner.member.id
         ? {
-          id: match.winner.id,
-          name: match.winner.name
+          id: match.winner.member.id,
+          name: match.winner.member.name
         }
         : null
     });
@@ -273,26 +273,26 @@ function getBracketData(matches) {
 }
 
 // builds an html view of match data
-async function generateBracketHtml(matches) {
+async function generateBracketHtml(rounds) {
   const templatePath = path.join(__dirname, '..', 'bracket.ejs');
-  const html = await ejs.renderFile(templatePath, { matches });
+  const html = await ejs.renderFile(templatePath, { rounds });
 
   return html;
 }
 
 // Get the bracket for a tournament
 exports.getBracket = async (req, res) => {
-  const id = req.params.id;
+  const tournamentId = req.params.id;
   const format = req.query.format || 'json';
 
   try {
-    const tournament = await Tournament.findByPk(id);
+    const tournament = await Tournament.findByPk(tournamentId);
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found' });
     }
 
     const matches = await Match.findAll({
-      where: { tournamentId: id },
+      where: { tournamentId },
       include: [
         { model: Participant, as: 'player1', include: { model: Member, as: 'member' }},
         { model: Participant, as: 'player2', include: { model: Member, as: 'member' }},
@@ -306,7 +306,7 @@ exports.getBracket = async (req, res) => {
     if (format === 'json') {
       res.json(bracketData);
     } else if (format === 'html') {
-      const html = generateBracketHtml(bracketData);
+      const html = await generateBracketHtml(bracketData);
       res.send(html);
     } else if (format === 'image') {
       // Generate and send image representation of the bracket

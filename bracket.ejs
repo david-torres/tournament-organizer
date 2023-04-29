@@ -1,21 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tournament Bracket</title>
-    <style>
-        /* Add your custom CSS styles for the bracket here */
-    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
 </head>
+
 <body>
-    <h1>Tournament Bracket</h1>
-    <ul>
-        <% matches.matches.forEach(function(match) { %>
-            <li>
-                <p>Match <%= match.id %>: <%= match.participant1_id %> vs. <%= match.participant2_id %></p>
-            </li>
-        <% }); %>
-    </ul>
+    <section class="section">
+        <div class="container">
+            <h1 class="title">Tournament Bracket</h1>
+            <% Object.keys(rounds).forEach(function(i) { %>
+
+                <h2 class="subtitle">Round <%= i %></h2>
+
+                <div class="content">
+                    <ul>
+                        <% for (var j=0; j < rounds[i].length; j++) { %>
+
+                            <li>
+
+                                <p>
+                                    <%= rounds[i][j].player1.name %> VS <%= rounds[i][j].player2.name %>
+                                </p>
+                                <% if (rounds[i][j].winner) { %>
+                                    <p>
+                                        Winner: <strong><%= rounds[i][j].winner.name %></strong>
+                                    </p>
+                                <% } %>
+                                <hr/>
+                            </li>
+
+                        <% } %>
+                    </ul>
+                </div>
+            <% }) %>
+        </div>
+    </section>
 </body>
+
 </html>
