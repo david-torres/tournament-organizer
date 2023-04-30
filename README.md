@@ -8,8 +8,8 @@ A REST API for creating and managing single-elimination tournaments, participant
 - Create single-elimination tournaments
 - Allow members to join tournaments
 - Generate randomized matches, supporting byes for players with the highest ELO scores
-- Generate a bracket graphic for visualizing the tournament
 - Track member ELO scores across matches and tournaments
+- TODO: Generate a bracket graphic for visualizing the tournament
 
 ## Getting Started
 
@@ -58,9 +58,9 @@ To visualize the bracket of a tournament, open `bracket.html` in your browser, a
 
 ## Running the Simulation Script
 
-You can run the `simulateTournament.js` script to simulate the entire flow of adding members, creating a tournament, participants joining, generating matches, and randomly assigning winners until the tournament is complete:
+You can run the `simulate-tournament.js` script to simulate the entire flow of adding members, creating a tournament, participants joining, generating matches, and randomly assigning winners until the tournament is complete:
 
-    node simulateTournament.js
+    node simulate-tournament.js
 
 ## AI Disclosure
 
