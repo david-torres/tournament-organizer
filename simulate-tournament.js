@@ -8,8 +8,11 @@ async function createMemberIfNotExists(name) {
     const existingMember = await client.searchMembers(name);
 
     if ('rows' in existingMember && existingMember['rows'].length > 0) {
+      console.log(`Fetched member ${name}`);
       return existingMember['rows'][0];
     }
+
+    console.log(`Created member ${name}`);
     return await client.createMember(name);
   } catch (error) {
     console.error(`Error creating member: ${error.message}`);
@@ -22,7 +25,7 @@ function displayMatchResults(matches) {
   console.log('------------------------------------');
   matches.forEach((match) => {
     console.log(
-      `Match ID: ${match.id} | ${match.player1.Member.name} vs ${match.player2.Member.name} | Winner: ${match.winner.Member.name} (${match.winner.Member.elo})`
+      `Match ID: ${match.id} | ${match.player1.member.name} vs ${match.player2.member.name} | Winner: ${match.winner.member.name} (${match.winner.member.elo})`
     );
   });
   console.log('------------------------------------\n');
@@ -33,7 +36,7 @@ async function main() {
     const members = await Promise.all(memberNames.map(createMemberIfNotExists)).catch(error => {
       console.log(error.message);
     });
-    const tournament = await client.createTournament('Demo Tournament', 'single_elimination');
+    const tournament = await client.createTournament(`Demo Tournament ${Math.round(Math.random() * 10000)}`, 'single_elimination');
     const tournamentId = tournament.id;
     await Promise.all(members.map((member) => client.addParticipant(tournamentId, member.id))).catch(error => {
       console.log(error.message);
@@ -57,9 +60,9 @@ async function main() {
 
       // Simulate the matches and update winners
       for (const match of pendingMatches) {
-        const winnerId = Math.random() > 0.5 ? match.player1.id : match.player2.id;
-        await client.updateMatch(tournamentId, match.id, winnerId);
-        console.log(`Match ${match.id} completed. Winner: ${winnerId}`);
+        const player = Math.random() > 0.5 ? match.player1 : match.player2;
+        await client.updateMatch(tournamentId, match.id, player.id);
+        console.log(`Match ${match.id} completed. Winner: ${player.member.name}`);
       }
     }
 
