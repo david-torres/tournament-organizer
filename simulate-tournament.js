@@ -33,11 +33,13 @@ function displayMatchResults(matches) {
 
 async function main() {
   try {
+    const tournament = await client.createTournament(`Demo Tournament ${Math.round(Math.random() * 10000)}`, 'single_elimination', 8);
+    const tournamentId = tournament.id;
+
     const members = await Promise.all(memberNames.map(createMemberIfNotExists)).catch(error => {
       console.log(error.message);
     });
-    const tournament = await client.createTournament(`Demo Tournament ${Math.round(Math.random() * 10000)}`, 'single_elimination');
-    const tournamentId = tournament.id;
+
     await Promise.all(members.map((member) => client.addParticipant(tournamentId, member.id))).catch(error => {
       console.log(error.message);
     });

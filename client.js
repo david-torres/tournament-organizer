@@ -13,7 +13,7 @@ async function apiCall(endpoint, method = 'GET', body = null) {
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-  
+
   // Check if the response status code indicates an error.
   if (!response.ok) {
     const json = await response.json();
@@ -42,8 +42,8 @@ async function getLatestTournament() {
   return response;
 }
 
-async function createTournament(name) {
-  const response = await apiCall('/tournaments', 'POST', { name });
+async function createTournament(name, type, size) {
+  const response = await apiCall('/tournaments', 'POST', { name, type, size });
   return response;
 }
 
