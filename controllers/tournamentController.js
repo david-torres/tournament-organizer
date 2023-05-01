@@ -260,7 +260,7 @@ function getBracketData(matches) {
         id: match.player2.member.id,
         name: match.player2.member.name
       },
-      winner: match.winner.member.id
+      winner: match.winner
         ? {
           id: match.winner.member.id,
           name: match.winner.member.name
