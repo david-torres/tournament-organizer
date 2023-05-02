@@ -40,6 +40,10 @@ async function main() {
       console.log(error.message);
     });
 
+    await Promise.all(members.map((member) => client.addParticipant(tournamentId, member.id))).catch(error => {
+      console.log(error.message);
+    });
+
     await client.startTournament(tournamentId);
 
     let tournamentCompleted = false;
