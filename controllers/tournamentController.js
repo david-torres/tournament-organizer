@@ -248,9 +248,9 @@ async function advanceRoundRobin(tournament) {
     });
 
     const latestRound = matches[0].round;
-    const totalRounds = tournament.Participants.length % 2 === 0
-      ? tournament.Participants.length - 1
-      : tournament.Participants.length;
+    const totalRounds = tournament.participants.length % 2 === 0
+      ? tournament.participants.length - 1
+      : tournament.participants.length;
 
     const completedMatches = matches.filter(match => match.winnerId !== null);
 
@@ -274,7 +274,10 @@ exports.updateMatch = async (req, res) => {
   const winnerId = req.body.winner_id;
 
   try {
-    const tournament = await Tournament.findByPk(tournamentId);
+    const tournament = await Tournament.findByPk(tournamentId, {
+      include: { model: Participant, as: 'participants' },
+    });
+
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found' });
     }
