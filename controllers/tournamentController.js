@@ -193,7 +193,7 @@ exports.startTournament = async (req, res) => {
 };
 
 // check if all matches have been completed for a round and generate new matches or complete the tournament
-const advanceRoundSingleElimination = async (tournament) => {
+const advanceSingleElimination = async (tournament) => {
   try {
     const matches = await Match.findAll({
       where: {
@@ -310,7 +310,7 @@ exports.updateMatch = async (req, res) => {
     // check if we advance the round
     switch (tournament.type) {
       case 'single_elimination': {
-        await advanceRoundSingleElimination(tournament);
+        await advanceSingleElimination(tournament);
         break;
       }
       case 'round_robin': {
