@@ -1,7 +1,10 @@
 const { faker } = require('@faker-js/faker');
 const client = require('./client');
 
-const memberNames = Array.from({ length: 8 }, () => faker.name.fullName());
+const TOURNAMENT_TYPE = 'single_elimination'; // or round_robin
+const PLAYER_COUNT = 8;
+
+const memberNames = Array.from({ length: PLAYER_COUNT }, () => faker.name.fullName());
 
 async function createMemberIfNotExists(name) {
   try {
@@ -33,7 +36,7 @@ function displayMatchResults(matches) {
 
 async function main() {
   try {
-    const tournament = await client.createTournament(`Demo Tournament ${Math.round(Math.random() * 10000)}`, 'single_elimination', 8);
+    const tournament = await client.createTournament(`Demo Tournament ${Math.round(Math.random() * 10000)}`, TOURNAMENT_TYPE, PLAYER_COUNT);
     const tournamentId = tournament.id;
 
     const members = await Promise.all(memberNames.map(createMemberIfNotExists)).catch(error => {

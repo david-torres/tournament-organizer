@@ -96,13 +96,49 @@ function generateSingleEliminationMatches(participants) {
 
     matches.push({
       round: 1,
-      player1,
-      player2,
+      player1Id: player1.id,
+      player2Id: player2.id,
     });
   }
 
   return matches;
 }
+
+// generate round robin matchups
+function generateRoundRobinMatches(participants) {
+  const matches = [];
+  const rounds = participants.length % 2 === 0 ? participants.length - 1 : participants.length;
+  const numberOfMatches = participants.length / 2;
+
+  if (participants.length % 2 !== 0) {
+    participants.push({ id: null }); // Add a "dummy participant" (bye) for odd number of participants
+  }
+
+  for (let round = 1; round <= rounds; round++) {
+    for (let match = 1; match <= numberOfMatches; match++) {
+      const player1 = participants[match - 1];
+      const player2 = participants[participants.length - match];
+
+      // Avoid duplicate matches and exclude matches with the "dummy participant"
+      if (player1.id !== player2.id && player1.id !== null && player2.id !== null) {
+        matches.push({
+          round,
+          player1Id: player1.id,
+          player2Id: player2.id,
+        });
+      }
+    }
+
+    // Rotate the participants array, keeping the first participant fixed
+    const firstParticipant = participants.shift();
+    const secondParticipant = participants.shift();
+    participants.push(firstParticipant);
+    participants.unshift(secondParticipant);
+  }
+
+  return matches;
+}
+
 
 // Start the tournament by generating matches for a single elimination tournament with byes based on ELO scores and random match-ups
 exports.startTournament = async (req, res) => {
@@ -127,6 +163,10 @@ exports.startTournament = async (req, res) => {
             matches = generateSingleEliminationMatches(tournament.participants);
             break;
           }
+          case 'round_robin': {
+            matches = generateRoundRobinMatches(tournament.participants);
+            break;
+          }
           default:
             throw new Error('Invalid tournament type');
         }
@@ -134,8 +174,8 @@ exports.startTournament = async (req, res) => {
         // Insert the generated matches into the database using Sequelize
         await Match.bulkCreate(matches.map(match => ({
           round: match.round,
-          player1Id: match.player1 ? match.player1.id : null,
-          player2Id: match.player2 ? match.player2.id : null,
+          player1Id: match.player1Id ? match.player1Id : null,
+          player2Id: match.player2Id ? match.player2Id : null,
           tournamentId: tournament.id,
         })));
 
@@ -153,7 +193,7 @@ exports.startTournament = async (req, res) => {
 };
 
 // check if all matches have been completed for a round and generate new matches or complete the tournament
-const advanceRound = async (tournament) => {
+const advanceSingleElimination = async (tournament) => {
   try {
     const matches = await Match.findAll({
       where: {
@@ -195,7 +235,37 @@ const advanceRound = async (tournament) => {
   } catch (error) {
     console.error(error);
   }
-};
+}
+
+// check if all matches have been completed for a round and generate new matches or complete the tournament
+async function advanceRoundRobin(tournament) {
+  try {
+    const matches = await Match.findAll({
+      where: {
+        tournamentId: tournament.id,
+      },
+      order: [['round', 'DESC']],
+    });
+
+    const latestRound = matches[0].round;
+    const totalRounds = tournament.Participants.length % 2 === 0
+      ? tournament.Participants.length - 1
+      : tournament.Participants.length;
+
+    const completedMatches = matches.filter(match => match.winnerId !== null);
+
+    if (completedMatches.length === matches.length) {
+      console.log(`All matches completed for round #${latestRound}.`);
+
+      if (latestRound === totalRounds) {
+        console.log(`All rounds complete. Tournament finished.`);
+        await tournament.update({ status: 'completed' });
+      }
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
 
 // Update a match result and update participant ELO scores
 exports.updateMatch = async (req, res) => {
@@ -237,8 +307,17 @@ exports.updateMatch = async (req, res) => {
     await participant1.member.update({ elo: newElo1 });
     await participant2.member.update({ elo: newElo2 });
 
-    // Call advanceRound
-    await advanceRound(tournament);
+    // check if we advance the round
+    switch (tournament.type) {
+      case 'single_elimination': {
+        await advanceSingleElimination(tournament);
+        break;
+      }
+      case 'round_robin': {
+        await advanceRoundRobin(tournament);
+        break;
+      }
+    }
 
     res.json({ message: 'Match updated' });
   } catch (error) {
