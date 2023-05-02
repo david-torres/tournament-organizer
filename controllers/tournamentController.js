@@ -2,11 +2,17 @@ const ejs = require('ejs');
 const path = require('path');
 const { Op, UniqueConstraintError } = require('sequelize');
 const { Tournament, Participant, Match, Member } = require('../models');
-const { calculateUpdatedElo } = require('../utils');
+const { calculateUpdatedElo, isPowerOfTwo } = require('../utils');
 
 // Create a new tournament
 exports.createTournament = async (req, res) => {
   try {
+    const params = req.body;
+    if (params.type === 'single_elimination') {
+      if (!(isPowerOfTwo(params.size))) {
+        throw new Error("Single elimination tournament `size` must be a power of 2 (2, 4, 8, 16...");
+      }
+    }
     const newTournament = await Tournament.create(req.body);
     res.status(201).json(newTournament);
   } catch (error) {
@@ -33,6 +39,16 @@ exports.addParticipant = async (req, res) => {
       return res.status(404).json({ error: 'Tournament not found' });
     }
 
+    if (tournament.type == 'single_elimination') {
+      const participants = await Participant.count({
+        where: { tournamentId }
+      });
+
+      if (participants === tournament.size) {
+        throw new Error('Tournament player quota already met');
+      }
+    }
+
     await Participant.create({ memberId, tournamentId });
     res.status(201).json({ message: 'Participant added to the tournament' });
 
@@ -49,7 +65,7 @@ exports.addParticipant = async (req, res) => {
 exports.getParticipants = async (req, res) => {
   try {
     const tournament = await Tournament.findByPk(req.params.id, {
-      include: { model: Participant, as: 'participants', include: { model: Member, as: 'member' }},
+      include: { model: Participant, as: 'participants', include: { model: Member, as: 'member' } },
     });
 
     if (tournament) {
@@ -62,32 +78,16 @@ exports.getParticipants = async (req, res) => {
   }
 };
 
-// generate matchups, granting byes to the highest elo players if needed
-function generateMatches(participants) {
+// generate single elimination matchups
+function generateSingleEliminationMatches(participants) {
   const matches = [];
   let matchIndex = 0;
 
-  // Sort participants by ELO, descending
-  participants.sort((a, b) => b.elo - a.elo);
-
-  // Calculate the number of byes needed
-  const rounds = Math.ceil(Math.log2(participants.length));
-  const byesNeeded = Math.pow(2, rounds) - participants.length;
-
-  // Assign byes to the highest-ranked participants
-  for (let i = 0; i < byesNeeded; i++) {
-    participants[i].bye = true;
-  }
-
-  // Randomize the remaining participants
-  const remainingParticipants = participants.slice(byesNeeded);
-  for (let i = remainingParticipants.length - 1; i > 0; i--) {
+  // Randomize the participants
+  for (let i = participants.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [remainingParticipants[i], remainingParticipants[j]] = [remainingParticipants[j], remainingParticipants[i]];
+    [participants[i], participants[j]] = [participants[j], participants[i]];
   }
-
-  // Combine the participants with byes and the randomized participants
-  participants = [...participants.slice(0, byesNeeded), ...remainingParticipants];
 
   // Generate first-round matches
   for (let position = 1; position <= participants.length / 2; position++) {
@@ -121,7 +121,15 @@ exports.startTournament = async (req, res) => {
       if (tournament.participants.length < 2) {
         res.status(400).json({ error: 'Not enough participants to start the tournament' });
       } else {
-        const matches = generateMatches(tournament.participants);
+        let matches;
+        switch (tournament.type) {
+          case 'single_elimination': {
+            matches = generateSingleEliminationMatches(tournament.participants);
+            break;
+          }
+          default:
+            throw new Error('Invalid tournament type');
+        }
 
         // Insert the generated matches into the database using Sequelize
         await Match.bulkCreate(matches.map(match => ({
@@ -204,7 +212,7 @@ exports.updateMatch = async (req, res) => {
     const match = await Match.findOne({
       where: {
         id: matchId,
-        tournamentId: tournamentId
+        tournamentId
       }
     });
 
@@ -294,9 +302,9 @@ exports.getBracket = async (req, res) => {
     const matches = await Match.findAll({
       where: { tournamentId },
       include: [
-        { model: Participant, as: 'player1', include: { model: Member, as: 'member' }},
-        { model: Participant, as: 'player2', include: { model: Member, as: 'member' }},
-        { model: Participant, as: 'winner', include: { model: Member, as: 'member' }}
+        { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
+        { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
+        { model: Participant, as: 'winner', include: { model: Member, as: 'member' } }
       ],
       order: [['round', 'ASC'], ['id', 'ASC']]
     });
@@ -341,9 +349,9 @@ exports.getMatches = async (req, res) => {
     const matches = await Match.findAll({
       where: matchFilter,
       include: [
-        { model: Participant, as: 'player1', include: { model: Member, as: 'member' }},
-        { model: Participant, as: 'player2', include: { model: Member, as: 'member' }},
-        { model: Participant, as: 'winner', include: { model: Member, as: 'member' }},
+        { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
+        { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
+        { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
       ],
       order: [['id', 'ASC']],
     });

@@ -14,6 +14,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'single_elimination',
     },
+    size: {
+      type: DataTypes.INTEGER,
+    },
     status: {
       type: DataTypes.STRING,
       allowNull: false,

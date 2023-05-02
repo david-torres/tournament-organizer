@@ -29,3 +29,8 @@ async function generateBracketImage(bracketHtml) {
 }
 
 module.exports.generateBracketImage = generateBracketImage;
+
+exports.isPowerOfTwo = n => {
+  // Check if the number is non-negative and has only one set bit
+  return n > 0 && (n & (n - 1)) === 0;
+}
