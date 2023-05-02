@@ -8,7 +8,7 @@ const { calculateUpdatedElo, isPowerOfTwo } = require('../utils');
 exports.createTournament = async (req, res) => {
   try {
     const params = req.body;
-    if (params.type === 'single_elimination') {
+    if (params.type === 'single_elimination' || params.type === 'double_elimination') {
       if (!(isPowerOfTwo(params.size))) {
         throw new Error("Single elimination tournament `size` must be a power of 2 (2, 4, 8, 16...");
       }
@@ -104,6 +104,53 @@ function generateSingleEliminationMatches(participants) {
   return matches;
 }
 
+// generate double elimination matchups
+function generateDoubleEliminationMatches(participants) {
+  const matches = [];
+  let matchIndex = 0;
+
+  // Calculate the number of rounds for the upper bracket
+  const rounds = Math.ceil(Math.log2(participants.length));
+
+  // Randomize the participants
+  for (let i = participants.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [participants[i], participants[j]] = [participants[j], participants[i]];
+  }
+
+  // Generate matches for the first round of the upper bracket
+  for (let position = 1; position <= participants.length / 2; position++) {
+    const player1 = participants[matchIndex++];
+    const player2 = participants[matchIndex++];
+
+    matches.push({
+      bracket: 'upper',
+      round: 1,
+      position,
+      player1Id: player1.id,
+      player2Id: player2.id,
+    });
+  }
+
+  // Generate placeholders for the remaining rounds of the upper bracket and the lower bracket
+  for (let round = 2; round <= rounds * 2 - 1; round++) {
+    const roundMatches = round <= rounds ? Math.pow(2, rounds - round) : Math.pow(2, round - rounds);
+
+    for (let position = 1; position <= roundMatches; position++) {
+      matches.push({
+        bracket: round <= rounds ? 'upper' : 'lower',
+        round,
+        position,
+        player1Id: null,
+        player2Id: null,
+      });
+    }
+  }
+
+  return matches;
+}
+
+
 // generate round robin matchups
 function generateRoundRobinMatches(participants) {
   const matches = [];
@@ -163,6 +210,10 @@ exports.startTournament = async (req, res) => {
             matches = generateSingleEliminationMatches(tournament.participants);
             break;
           }
+          case 'double_elimination': {
+            matches = generateDoubleEliminationMatches(tournament.participants);
+            break;
+          }
           case 'round_robin': {
             matches = generateRoundRobinMatches(tournament.participants);
             break;
@@ -174,6 +225,8 @@ exports.startTournament = async (req, res) => {
         // Insert the generated matches into the database using Sequelize
         await Match.bulkCreate(matches.map(match => ({
           round: match.round,
+          position: match.position ? match.position : null,
+          bracket: match.bracket ? match.bracket : null,
           player1Id: match.player1Id ? match.player1Id : null,
           player2Id: match.player2Id ? match.player2Id : null,
           tournamentId: tournament.id,
@@ -235,6 +288,74 @@ const advanceSingleElimination = async (tournament) => {
   } catch (error) {
     console.error(error);
   }
+}
+
+// check if all matches have been completed for a round, update brackets, and generate new matches or complete the tournament
+async function advanceDoubleElimination(tournament) {
+  try {
+    const matches = await Match.findAll({
+      where: { tournamentId: tournament.id },
+      order: [['bracket', 'ASC'], ['round', 'ASC'], ['position', 'ASC']],
+    });
+
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+
+      if (match.winnerId === null) {
+        // Match result not yet available; skip to the next match
+        continue;
+      }
+
+      const nextMatchIndex = findNextMatchIndex(match, matches);
+      if (nextMatchIndex === -1) {
+        // Tournament has ended; update the tournament status and winner
+        await tournament.update({ status: 'completed', winnerId: match.winnerId });
+        return;
+      }
+
+      const nextMatch = matches[nextMatchIndex];
+
+      // Assign the winner of the current match to the appropriate slot in the next match
+      if (match.bracket === 'upper') {
+        nextMatch.player1Id = nextMatch.player1Id || match.winnerId;
+      } else {
+        nextMatch.player2Id = nextMatch.player2Id || match.winnerId;
+      }
+
+      // Update the next match in the database
+      await nextMatch.save();
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function findNextMatchIndex(match, matches) {
+  for (let i = 0; i < matches.length; i++) {
+    const nextMatch = matches[i];
+
+    // Check for the winner of the current match progressing in the same bracket
+    if (
+      nextMatch.bracket === match.bracket &&
+      nextMatch.round === match.round + 1 &&
+      nextMatch.position === Math.ceil(match.position / 2)
+    ) {
+      return i;
+    }
+
+    // Check for the loser of the current match dropping down to the lower bracket
+    if (
+      match.bracket === 'upper' &&
+      nextMatch.bracket === 'lower' &&
+      nextMatch.round === match.round * 2 - 1 &&
+      nextMatch.position === match.position
+    ) {
+      return i;
+    }
+  }
+
+  // No next match found; the tournament has ended
+  return -1;
 }
 
 // check if all matches have been completed for a round and generate new matches or complete the tournament
@@ -314,6 +435,10 @@ exports.updateMatch = async (req, res) => {
     switch (tournament.type) {
       case 'single_elimination': {
         await advanceSingleElimination(tournament);
+        break;
+      }
+      case 'double_elimination': {
+        await advanceDoubleElimination(tournament);
         break;
       }
       case 'round_robin': {

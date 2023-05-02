@@ -10,7 +10,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     type: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM('single_elimination', 'double_elimination', 'round_robin'),
       allowNull: false,
       defaultValue: 'single_elimination',
     },

@@ -9,9 +9,17 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    position: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    bracket: {
+      type: DataTypes.ENUM('upper', 'lower'),
+      allowNull: true,
+    },
     player1Id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'Participant',
         key: 'id',

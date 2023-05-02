@@ -1,7 +1,7 @@
 const { faker } = require('@faker-js/faker');
 const client = require('./client');
 
-const TOURNAMENT_TYPE = 'single_elimination'; // or round_robin
+const TOURNAMENT_TYPE = 'double_elimination'; // or round_robin
 const PLAYER_COUNT = 8;
 
 const memberNames = Array.from({ length: PLAYER_COUNT }, () => faker.name.fullName());
@@ -65,6 +65,10 @@ async function main() {
 
       // Simulate the matches and update winners
       for (const match of pendingMatches) {
+        if (match.player1 == null && match.player2 == null) {
+          // placeholder match for double-elim lower bracket
+          continue;
+        }
         const player = Math.random() > 0.5 ? match.player1 : match.player2;
         await client.updateMatch(tournamentId, match.id, player.id);
         console.log(`Match ${match.id} completed. Winner: ${player.member.name}`);
