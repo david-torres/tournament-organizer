@@ -9,8 +9,8 @@ exports.createMember = async (req, res) => {
   try {
     const newMember = await Member.create({ name, elo_score });
     res.status(200).json(newMember);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -19,8 +19,8 @@ exports.getMembers = async (req, res) => {
   try {
     const members = await Member.findAll();
     res.status(200).json(members);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -31,7 +31,7 @@ exports.searchMembers = async (req, res) => {
   try {
     const members = await Member.findAll({ where: { name } });
     res.status(200).json({ "rows": members });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };

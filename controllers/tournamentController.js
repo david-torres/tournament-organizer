@@ -45,7 +45,7 @@ exports.addParticipant = async (req, res) => {
       });
 
       if (participants === tournament.size) {
-        throw new Error('Tournament player quota already met');
+        res.status(409).json({ error: 'Tournament player limit already met' });
       }
     }
 
@@ -56,7 +56,7 @@ exports.addParticipant = async (req, res) => {
     if (error instanceof UniqueConstraintError) {
       res.status(409).json({ error: 'Member is already a participant in this tournament' });
     } else {
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: error.message });
     }
   }
 };
@@ -325,7 +325,7 @@ exports.updateMatch = async (req, res) => {
     res.json({ message: 'Match updated' });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -405,7 +405,7 @@ exports.getBracket = async (req, res) => {
     }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -441,7 +441,7 @@ exports.getMatches = async (req, res) => {
     res.json(matches);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message });
   }
 }
 
@@ -459,6 +459,6 @@ exports.getLatestTournament = async (req, res) => {
     res.json(latestTournament);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: error.message });
   }
 }
