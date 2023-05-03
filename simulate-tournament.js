@@ -38,6 +38,7 @@ async function main() {
   try {
     const tournament = await client.createTournament(`Demo Tournament ${Math.round(Math.random() * 10000)}`, TOURNAMENT_TYPE, PLAYER_COUNT);
     const tournamentId = tournament.id;
+    console.log(`Created tournament: ${tournament.name} with ID: ${tournament.id}`);
 
     const members = await Promise.all(memberNames.map(createMemberIfNotExists)).catch(error => {
       console.log(error.message);

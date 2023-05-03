@@ -2,7 +2,7 @@ const ejs = require('ejs');
 const path = require('path');
 const { Op, UniqueConstraintError } = require('sequelize');
 const { Tournament, Participant, Match, Member } = require('../models');
-const { calculateUpdatedElo, isPowerOfTwo } = require('../utils');
+const { calculateUpdatedElo, isPowerOfTwo, generateBracketImage } = require('../utils');
 
 // Create a new tournament
 exports.createTournament = async (req, res) => {
@@ -363,9 +363,9 @@ function getBracketData(matches) {
 }
 
 // builds an html view of match data
-async function generateBracketHtml(rounds) {
+async function generateBracketHtml(tournament, rounds) {
   const templatePath = path.join(__dirname, '..', 'bracket.ejs');
-  const html = await ejs.renderFile(templatePath, { rounds });
+  const html = await ejs.renderFile(templatePath, { tournament, rounds });
 
   return html;
 }
@@ -396,10 +396,14 @@ exports.getBracket = async (req, res) => {
     if (format === 'json') {
       res.json(bracketData);
     } else if (format === 'html') {
-      const html = await generateBracketHtml(bracketData);
+      const html = await generateBracketHtml(tournament, bracketData);
       res.send(html);
     } else if (format === 'image') {
       // Generate and send image representation of the bracket
+      const html = await generateBracketHtml(tournament, bracketData);
+      const img = await generateBracketImage(html);
+      res.writeHead(200, { 'Content-Type': 'image/png' });
+      res.end(img, 'binary');
     } else {
       res.status(400).json({ error: 'Invalid format specified' });
     }

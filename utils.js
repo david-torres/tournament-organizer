@@ -1,5 +1,4 @@
-const { JSDOM } = require('jsdom');
-const html2canvas = require('html2canvas');
+const nodeHtmlToImage = require('node-html-to-image');
 
 const K_FACTOR = 32; // You can adjust the K-factor to control the impact of a single match on the ELO score
 
@@ -17,20 +16,19 @@ exports.calculateUpdatedElo = (eloA, eloB, actualScoreA, actualScoreB) => {
   return [newEloA.toFixed(2), newEloB.toFixed(2)].map(parseFloat);
 };
 
-// TODO: fix this...
-async function generateBracketImage(bracketHtml) {
-  const dom = new JSDOM(bracketHtml);
-  const { document } = dom.window;
-
-  const canvas = await html2canvas(document.body, { useCORS: true });
-  const imgData = canvas.toDataURL('image/png');
-
-  return imgData;
-}
-
-module.exports.generateBracketImage = generateBracketImage;
+exports.generateBracketImage = async (bracketHtml) => {
+  try {
+    const image = await nodeHtmlToImage({
+      html: bracketHtml
+    });
+    return image;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+};
 
 exports.isPowerOfTwo = n => {
   // Check if the number is non-negative and has only one set bit
   return n > 0 && (n & (n - 1)) === 0;
-}
+};

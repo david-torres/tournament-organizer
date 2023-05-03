@@ -5,38 +5,107 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tournament Bracket</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css"> -->
+    <style>
+        /*
+         *  Flex Layout Specifics
+         */
+        main {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .round {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            width: 200px;
+            list-style: none;
+            padding: 0;
+        }
+
+        .round .spacer {
+            flex-grow: 1;
+        }
+
+        .round .spacer:first-child,
+        .round .spacer:last-child {
+            flex-grow: .5;
+        }
+
+        .round .game-spacer {
+            flex-grow: 1;
+        }
+
+        /*
+         *  General Styles
+         */
+        body {
+            font-family: sans-serif;
+            font-size: small;
+            padding: 10px;
+            line-height: 1.4em;
+        }
+
+        li.game {
+            padding-left: 20px;
+        }
+
+        li.game.winner {
+            font-weight: bold;
+        }
+
+        li.game span {
+            float: right;
+            margin-right: 5px;
+        }
+
+        li.game-top {
+            border-bottom: 1px solid #aaa;
+        }
+
+        li.game-spacer {
+            border-right: 1px solid #aaa;
+            min-height: 40px;
+        }
+
+        li.game-bottom {
+            border-top: 1px solid #aaa;
+        }
+    </style>
 </head>
 
 <body>
     <section class="section">
         <div class="container">
-            <h1 class="title">Tournament Bracket</h1>
-            <% Object.keys(rounds).forEach(function(i) { %>
+            <div class="content">
+                <h1 class="title">
+                    <%=tournament.name%> - <%=tournament.type%>
+                </h1>
+                <main id="tournament">
+                <% Object.keys(rounds).forEach(function(i) { %>
 
-                <h2 class="subtitle">Round <%= i %></h2>
-
-                <div class="content">
-                    <ul>
+                    <ul class="round round-<%= i %>">
+                        <li class="spacer">&nbsp;</li>
                         <% for (var j=0; j < rounds[i].length; j++) { %>
-
-                            <li>
-
-                                <p>
-                                    <%= rounds[i][j].player1.name %> VS <%= rounds[i][j].player2.name %>
-                                </p>
-                                <% if (rounds[i][j].winner) { %>
-                                    <p>
-                                        Winner: <strong><%= rounds[i][j].winner.name %></strong>
-                                    </p>
-                                <% } %>
-                                <hr/>
+                            <li
+                                class="game game-top<% if (rounds[i][j].winner.id === rounds[i][j].player1.id) { %> winner<% } %>">
+                                <%= rounds[i][j].player1.name %>
                             </li>
+                            <li class="game game-spacer">&nbsp;</li>
+                            <li
+                                class="game game-bottom<% if (rounds[i][j].winner.id === rounds[i][j].player2.id) { %> winner<% } %>">
+                                <%= rounds[i][j].player2.name %>
+                            </li>
+
+                            <li class="spacer">&nbsp;</li>
 
                         <% } %>
                     </ul>
-                </div>
-            <% }) %>
+
+                <% }) %>
+                </main>
+            </div>
         </div>
     </section>
 </body>
