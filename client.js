@@ -27,6 +27,11 @@ async function apiCall(endpoint, method = 'GET', body = null) {
   return result;
 }
 
+async function getMembers() {
+  const response = await apiCall(`/members`);
+  return response;
+}
+
 async function searchMembers(name) {
   const response = await apiCall(`/members/search?name=${name}`);
   return response;
@@ -79,6 +84,7 @@ async function updateMatch(tournament_id, match_id, winner_id) {
 }
 
 module.exports = {
+  getMembers,
   searchMembers,
   createMember,
   getLatestTournament,

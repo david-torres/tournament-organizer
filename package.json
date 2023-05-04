@@ -4,7 +4,8 @@
   "description": "A REST API for creating and managing Tournaments, Participants, and Matches.",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "init-db": "node init_db.js"
   },
   "dependencies": {
     "@faker-js/faker": "^7.6.0",
