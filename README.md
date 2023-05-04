@@ -10,7 +10,7 @@ A REST API for creating and managing tournaments (single-elimination or round-ro
 - Allow members to join tournaments
 - Generate randomized matches, supporting byes for players with the highest ELO scores
 - Track member ELO scores across matches and tournaments
-- TODO: Generate a bracket graphic for visualizing the tournament
+- Generate a bracket graphic for visualizing the tournament
 
 ## Getting Started
 
@@ -53,9 +53,17 @@ The API server will be running at `http://localhost:3000`.
 | PATCH  | /tournaments/:id/matches/:id           | Update a match (set the winner)                    |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
 
-## Bracket Visualization [TODO]
+## Bracket Visualization
 
-To visualize the bracket of a tournament, open `bracket.html` in your browser, and update the `API_BASE_URL` and `tournamentId` variables in `bracket.js` to match your API server and desired tournament ID.
+You can get an HTML or PNG representation of the tournament bracket by calling:
+
+HTML
+
+    wget http://localhost:3000/tournaments/:id/bracket?format=html
+
+PNG
+
+    wget http://localhost:3000/tournaments/:id/bracket?format=image
 
 ## Running the Simulation Script
 
