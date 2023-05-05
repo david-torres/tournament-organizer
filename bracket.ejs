@@ -89,12 +89,12 @@
                         <li class="spacer">&nbsp;</li>
                         <% for (var j=0; j < rounds[i].length; j++) { %>
                             <li
-                                class="game game-top<% if (rounds[i][j].winner.id === rounds[i][j].player1.id) { %> winner<% } %>">
+                                class="game game-top<% if (rounds[i][j].winner && rounds[i][j].winner.id === rounds[i][j].player1.id) { %> winner<% } %>">
                                 <%= rounds[i][j].player1.name %>
                             </li>
                             <li class="game game-spacer">&nbsp;</li>
                             <li
-                                class="game game-bottom<% if (rounds[i][j].winner.id === rounds[i][j].player2.id) { %> winner<% } %>">
+                                class="game game-bottom<% if (rounds[i][j].winner && rounds[i][j].winner.id === rounds[i][j].player2.id) { %> winner<% } %>">
                                 <%= rounds[i][j].player2.name %>
                             </li>
 
