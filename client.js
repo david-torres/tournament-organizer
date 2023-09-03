@@ -52,6 +52,11 @@ async function createTournament(name, type, size) {
   return response;
 }
 
+async function completeLeagueTournament(tournament_id) {
+  const response = await apiCall(`/tournaments/${tournament_id}/league`, 'POST');
+  return response;
+}
+
 async function startTournament(tournament_id) {
   const response = await apiCall(`/tournaments/${tournament_id}/start`, 'POST');
   return response;
@@ -83,6 +88,11 @@ async function updateMatch(tournament_id, match_id, winner_id) {
   return response;
 }
 
+async function createMatch(tournament_id, participant1, participant2) {
+  const response = await apiCall(`/tournaments/${tournament_id}/matches`, 'POST', { participant1, participant2 });
+  return response;
+}
+
 module.exports = {
   getMembers,
   searchMembers,
@@ -90,9 +100,11 @@ module.exports = {
   getLatestTournament,
   createTournament,
   startTournament,
+  completeLeagueTournament,
   getBracket,
   addParticipant,
   getParticipants,
   getMatches,
+  createMatch,
   updateMatch,
 };

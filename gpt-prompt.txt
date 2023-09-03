@@ -3,7 +3,7 @@ create a javascript REST API. This API will facilitate creating and managing Tou
 - create single elimination tournaments. members may opt to participate in tournaments.
 - generate matches
 - generate bracket graphic
-- track member ELO score across matches and tournaments.
+- track member Elo score across matches and tournaments.
 
 Perform these actions one at a time. I will prompt for the next action by saying, "next action"
 Describe the database schema and produce a script to generate it.

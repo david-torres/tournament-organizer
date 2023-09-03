@@ -21,6 +21,11 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id',
       },
     },
+    elo: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1200,
+    },
   }, {
     freezeTableName: true,
     indexes: [

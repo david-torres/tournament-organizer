@@ -5,7 +5,9 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "init-db": "node init_db.js"
+    "init-db": "node init_db.js",
+    "sim-single-elim": "node simulate-tournament.js",
+    "sim-league": "node simulate-league.js"
   },
   "dependencies": {
     "@faker-js/faker": "^7.6.0",
