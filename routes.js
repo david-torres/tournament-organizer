@@ -21,5 +21,9 @@ module.exports = function (app) {
 
   // Matches
   app.get('/tournaments/:id/matches', (req, res) => tournamentController.getMatches(req, res));
+  app.post('/tournaments/:id/matches', (req, res) => tournamentController.createMatch(req, res));
   app.patch('/tournaments/:id/matches/:match_id', (req, res) => tournamentController.updateMatch(req, res));
+
+  // Leagues
+  app.post('/tournaments/:id/league', (req, res) => tournamentController.completeLeagueTournament(req, res));
 };

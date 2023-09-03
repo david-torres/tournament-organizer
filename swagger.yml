@@ -190,7 +190,7 @@ paths:
 
   /matches/{id}:
     put:
-      summary: Update a match result and update participant ELO scores
+      summary: Update a match result and update participant Elo scores
       parameters:
         - in: path
           name: id

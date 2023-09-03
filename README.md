@@ -1,6 +1,6 @@
 # Tournament Organizer API
 
-A REST API for creating and managing tournaments (single-elimination or round-robin), participants, and matches, with support for ELO ratings and bracket visualization.
+A REST API for creating and managing tournaments (single-elimination or round-robin), participants, and matches, with support for Elo ratings and bracket visualization.
 
 ## Features
 
@@ -8,8 +8,8 @@ A REST API for creating and managing tournaments (single-elimination or round-ro
 - Create single-elimination tournaments
 - Create round-robin tournaments
 - Allow members to join tournaments
-- Generate randomized matches, supporting byes for players with the highest ELO scores
-- Track member ELO scores across matches and tournaments
+- Generate randomized matches, supporting byes for players with the highest Elo scores
+- Track member Elo scores across matches and tournaments
 - Generate a bracket graphic for visualizing the tournament
 
 ## Getting Started
