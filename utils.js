@@ -17,7 +17,7 @@ const calculateUpdatedElo = (eloA, eloB, actualScoreA, actualScoreB) => {
 };
 
 exports.updateElo = async (target1, target2, winnerId) => {
-  const actualScore1 = winnerId === target1.id ? 1 : 0;
+  const actualScore1 = String(winnerId) === String(target1.id) ? 1 : 0;
   const actualScore2 = 1 - actualScore1;
   const [newElo1, newElo2] = calculateUpdatedElo(target1['elo'], target2['elo'], actualScore1, actualScore2);
 

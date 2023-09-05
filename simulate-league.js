@@ -132,7 +132,7 @@ async function main() {
             });
 
             // mark the league as completed
-            tournamentCompleted = await client.completeLeagueTournament(tournamentId);
+            tournamentCompleted = await client.endTournament(tournamentId);
             console.log(`Tournament ${tournamentId} completed`);
         }
 

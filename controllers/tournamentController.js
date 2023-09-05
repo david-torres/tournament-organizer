@@ -153,43 +153,38 @@ exports.startTournament = async (req, res) => {
         return res.status(400).json({ error: 'Tournament has already been started' });
       }
 
-      // check if we have enough players
-      if (tournament.participants.length < 2) {
-        res.status(400).json({ error: 'Not enough participants to start the tournament' });
-      } else {
-        let matches;
-        switch (tournament.type) {
-          case 'single_elimination': {
-            matches = generateSingleEliminationMatches(tournament.participants);
-            break;
-          }
-          case 'round_robin': {
-            matches = generateRoundRobinMatches(tournament.participants);
-            break;
-          }
-          case 'league': {
-            // not needed
-            break;
-          }
-          default:
-            throw new Error('Invalid tournament type');
+      let matches;
+      switch (tournament.type) {
+        case 'single_elimination': {
+          matches = generateSingleEliminationMatches(tournament.participants);
+          break;
         }
-
-        if (matches) {
-          // Insert the generated matches into the database using Sequelize
-          await Match.bulkCreate(matches.map(match => ({
-            round: match.round,
-            player1Id: match.player1Id ? match.player1Id : null,
-            player2Id: match.player2Id ? match.player2Id : null,
-            tournamentId: tournament.id,
-          })));
+        case 'round_robin': {
+          matches = generateRoundRobinMatches(tournament.participants);
+          break;
         }
-
-        // Update the tournament status to 'in_progress'
-        await tournament.update({ status: 'in_progress' });
-
-        res.status(200).json({ message: 'Tournament started, matches generated' });
+        case 'league': {
+          // not needed
+          break;
+        }
+        default:
+          throw new Error('Invalid tournament type');
       }
+
+      if (matches) {
+        // Insert the generated matches into the database using Sequelize
+        await Match.bulkCreate(matches.map(match => ({
+          round: match.round,
+          player1Id: match.player1Id ? match.player1Id : null,
+          player2Id: match.player2Id ? match.player2Id : null,
+          tournamentId: tournament.id,
+        })));
+      }
+
+      // Update the tournament status to 'in_progress'
+      await tournament.update({ status: 'in_progress' });
+
+      res.status(200).json({ message: 'Tournament started, matches generated' });
     } else {
       res.status(404).json({ error: 'Tournament not found' });
     }
@@ -198,13 +193,22 @@ exports.startTournament = async (req, res) => {
   }
 };
 
-// update a league tournament status to 'completed' and set the winner to the player with the highest Elo score
-exports.completeLeagueTournament = async (req, res) => {
+// update a tournament status to 'completed' and set the winner to the player with the highest Elo score
+// note: this is only meant for league tournaments
+exports.endTournament = async (req, res) => {
   try {
     const tournament = await Tournament.findByPk(req.params.id, {
       include: { model: Participant, as: 'participants', include: { model: Member, as: 'member' } },
       order: [['elo', 'DESC']]
     });
+
+    if (tournament.type !== 'league') {
+      return res.status(400).json({ error: 'Cannot end a non-league tournament' });
+    }
+
+    if (tournament.status !== 'in_progress') {
+      return res.status(400).json({ error: 'Cannot end an unstarted tournament' });
+    }
 
     // get the league participant with the highest Elo score
     const winner = tournament.participants[0];
@@ -315,11 +319,32 @@ exports.createMatch = async (req, res) => {
       return res.status(400).json({ error: 'Cannot create matches for a non-league tournament' });
     }
 
+    // make sure the tournament has been started
+    if (tournament.status !== 'in_progress') {
+      return res.status(404).json({ error: 'Tournament not yet started' });
+    }
+
     const participant1 = tournament.participants.find(participant => participant.id === parseInt(participant1Id));
     const participant2 = tournament.participants.find(participant => participant.id === parseInt(participant2Id));
 
     if (!participant1 || !participant2) {
       return res.status(404).json({ error: 'Participant not found' });
+    }
+
+    // make sure the participants are not already in a match with each other that does not have a winner
+    const matches = await Match.findAll({
+      where: {
+        tournamentId,
+        [Op.or]: [
+          { player1Id: participant1.id, player2Id: participant2.id },
+          { player1Id: participant2.id, player2Id: participant1.id },
+        ],
+        winnerId: null,
+      },
+    });
+
+    if (matches.length > 0) {
+      return res.status(409).json({ error: 'Participants have an unresolved match' });
     }
 
     const match = await Match.create({
@@ -360,6 +385,11 @@ exports.updateMatch = async (req, res) => {
 
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    // make sure the tournament has been started
+    if (tournament.status !== 'in_progress') {
+      return res.status(404).json({ error: 'Tournament not yet started' });
     }
 
     const match = await Match.findOne({

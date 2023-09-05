@@ -52,7 +52,7 @@ async function createTournament(name, type, size) {
   return response;
 }
 
-async function completeLeagueTournament(tournament_id) {
+async function endTournament(tournament_id) {
   const response = await apiCall(`/tournaments/${tournament_id}/league`, 'POST');
   return response;
 }
@@ -100,7 +100,7 @@ module.exports = {
   getLatestTournament,
   createTournament,
   startTournament,
-  completeLeagueTournament,
+  endTournament,
   getBracket,
   addParticipant,
   getParticipants,
