@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const morgan = require('morgan');
-const config = require('./config');
+const config = require('./config/config');
 const routes = require('./routes');
 const { sequelize } = require('./models/index');
 
@@ -17,8 +17,8 @@ routes(app);
 sequelize.authenticate()
     .then(() => {
         console.log('Connection to the database has been established successfully.');
-        app.listen(config.PORT, () => {
-            console.log(`Tournament management API is running on port ${config.PORT}`);
+        app.listen(config[config.env].port, () => {
+            console.log(`Tournament management API is running on port ${config[config.env].port}`);
         });
     })
     .catch((error) => {

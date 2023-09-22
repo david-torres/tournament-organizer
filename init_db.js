@@ -1,15 +1,15 @@
 const Sequelize = require('sequelize');
-const config = require('./config');
+const config = require('./config/config');
 const MemberModel = require('./models/member');
 const TournamentModel = require('./models/tournament');
 const ParticipantModel = require('./models/participant');
 const MatchModel = require('./models/match');
 
-const sequelize = new Sequelize(config.DB_NAME, config.DB_USERNAME, config.DB_PASSWORD, {
-  host: config.DB_HOST,
-  port: config.DB_PORT,
-  dialect: config.DB_DIALECT,
-  storage: config.DB_STORAGE,
+const sequelize = new Sequelize(config[config.env].database, config[config.env].username, config[config.env].password, {
+  host: config[config.env].host,
+  port: config[config.env].db_port,
+  dialect: config[config.env].dialect,
+  storage: config[config.env].storage,
 });
 
 const models = {
