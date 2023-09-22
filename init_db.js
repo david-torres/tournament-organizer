@@ -7,7 +7,7 @@ const MatchModel = require('./models/match');
 
 const sequelize = new Sequelize(config[config.env].database, config[config.env].username, config[config.env].password, {
   host: config[config.env].host,
-  port: config[config.env].db_port,
+  port: config[config.env].port,
   dialect: config[config.env].dialect,
   storage: config[config.env].storage,
 });

@@ -17,8 +17,8 @@ routes(app);
 sequelize.authenticate()
     .then(() => {
         console.log('Connection to the database has been established successfully.');
-        app.listen(config[config.env].port, () => {
-            console.log(`Tournament management API is running on port ${config[config.env].port}`);
+        app.listen(config[config.env].server_port, () => {
+            console.log(`Tournament management API is running on port ${config[config.env].server_port}`);
         });
     })
     .catch((error) => {
