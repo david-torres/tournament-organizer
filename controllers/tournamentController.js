@@ -199,7 +199,7 @@ exports.endTournament = async (req, res) => {
   try {
     const tournament = await Tournament.findByPk(req.params.id, {
       include: { model: Participant, as: 'participants', include: { model: Member, as: 'member' } },
-      order: [['elo', 'DESC']]
+      order: [[{ model: Participant, as: 'participants' }, 'elo', 'DESC']],
     });
 
     if (tournament.type !== 'league') {
