@@ -2,7 +2,7 @@ const ejs = require('ejs');
 const path = require('path');
 const { Op, UniqueConstraintError } = require('sequelize');
 const { Tournament, Participant, Match, Member } = require('../models');
-const { updateElo, isPowerOfTwo, generateBracketImage } = require('../utils');
+const { updateElo, isPowerOfTwo, generateBracketImage, decayElo } = require('../utils');
 
 // Create a new tournament
 exports.createTournament = async (req, res) => {
@@ -572,6 +572,48 @@ exports.getLatestTournament = async (req, res) => {
     }
 
     res.json(latestTournament);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Decay ELO scores for all participants in a league. intended to run as a once-per-day cron job
+exports.decayElo = async (req, res) => {
+  try {
+    // get the latest tournament id
+    const latestTournament = await Tournament.findOne({
+      order: [['id', 'DESC']],
+    });
+
+    if (!latestTournament) {
+      return res.status(404).json({ error: 'No tournaments found' });
+    }
+    if (latestTournament.status !== 'in_progress') {
+      return res.status(404).json({ error: 'No tournaments in progress' });
+    }
+
+    const currentDate = new Date();
+    const participants = await Participant.findAll({
+      include: { model: Member, as: 'member' },
+    });
+
+    const updatedParticipants = [];
+
+    for (const participant of participants) {
+      const oldElo = participant.elo;
+      const updatedParticipant = decayElo(participant, currentDate);
+      await updatedParticipant.save();
+      updatedParticipants.push({
+        participantId: participant.id,
+        memberId: participant.member.id,
+        oldElo,
+        newElo: updatedParticipant.elo,
+        eloPenalty: oldElo - updatedParticipant.elo,
+      });
+    }
+
+    res.json({ participants: updatedParticipants });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
