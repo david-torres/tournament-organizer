@@ -25,6 +25,30 @@ exports.updateElo = async (target1, target2, winnerId) => {
   await target2.update({ elo: newElo2 });
 }
 
+exports.decayElo = (participant, lastActiveDate, currentDate, customDecaySettings = null) => {
+  const defaultDecaySettings = [
+      { threshold: 10, decayPerDay: 1, minElo: 0, maxElo: 1200 },
+      { threshold: 7, decayPerDay: 3, minElo: 1201, maxElo: 1800 },
+      { threshold: 3, decayPerDay: 5, minElo: 1801, maxElo: Infinity }
+  ];
+
+  const decaySettings = customDecaySettings || defaultDecaySettings;
+
+  const daysInactive = (currentDate - lastActiveDate) / (1000 * 3600 * 24);
+
+  const participantElo = parseFloat(participant.elo) || 0;
+  const tier = decaySettings.find(tier => participantElo >= tier.minElo && participantElo <= tier.maxElo);
+
+  if (tier && daysInactive > tier.threshold) {
+      const daysOverThreshold = daysInactive - tier.threshold;
+      const eloDecay = daysOverThreshold * tier.decayPerDay;
+
+      participant.elo = Math.max((participantElo - eloDecay).toFixed(2), tier.minElo);
+  }
+
+  return participant;
+}
+
 exports.generateBracketImage = async (bracketHtml) => {
   try {
     const image = await nodeHtmlToImage({

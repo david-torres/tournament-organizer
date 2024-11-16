@@ -1,8 +1,9 @@
 const ejs = require('ejs');
 const path = require('path');
-const { Op, UniqueConstraintError } = require('sequelize');
+const { Op, UniqueConstraintError, where } = require('sequelize');
 const { Tournament, Participant, Match, Member } = require('../models');
-const { updateElo, isPowerOfTwo, generateBracketImage } = require('../utils');
+const { updateElo, isPowerOfTwo, generateBracketImage, decayElo } = require('../utils');
+const member = require('../models/member');
 
 // Create a new tournament
 exports.createTournament = async (req, res) => {
@@ -572,6 +573,68 @@ exports.getLatestTournament = async (req, res) => {
     }
 
     res.json(latestTournament);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Decay ELO scores for all participants in a league. intended to run as a once-per-day cron job
+exports.decayElo = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // get the latest tournament id
+    const tournament = await Tournament.findByPk(id);
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+    if (tournament.status !== 'in_progress') {
+      return res.status(404).json({ error: 'No tournaments in progress' });
+    }
+
+    const participants = await Participant.findAll({
+      where: { tournamentId: tournament.id },
+      include: { model: Member, as: 'member' },
+    });
+
+    const updatedParticipants = [];
+
+    for (const participant of participants) {
+      // find last match for this tournament that this participant was in
+      const lastMatch = await Match.findOne({
+        where: {
+          tournamentId: tournament.id,
+          [Op.or]: [{ player1Id: participant.id }, { player2Id: participant.id }],
+          winnerId: { [Op.ne]: null },
+        },
+        order: [['updatedAt', 'DESC']],
+      });
+
+      if (!lastMatch) {
+        continue;
+      }
+
+      const oldElo = participant.elo;
+      const updatedParticipant = decayElo(participant, lastMatch.updatedAt, new Date());
+      await participant.update({ elo: updatedParticipant.elo });
+
+      updatedParticipants.push({
+        participant: { id: participant.id },
+        member: {
+          id: participant.member.id,
+          name: participant.member.name
+        },
+        elo: updatedParticipant.elo,
+        elo_decay: {
+          old: oldElo,
+          new: updatedParticipant.elo,
+          penalty: oldElo - updatedParticipant.elo,
+        }
+      });
+    }
+
+    res.json({ tournament, participants: updatedParticipants });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });

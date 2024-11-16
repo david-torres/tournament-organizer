@@ -26,4 +26,5 @@ module.exports = function (app) {
 
   // Leagues
   app.post('/tournaments/:id/league', (req, res) => tournamentController.endTournament(req, res));
+  app.post('/tournaments/:id/decay-elo', (req, res) => tournamentController.decayElo(req, res));
 };
