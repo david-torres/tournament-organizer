@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3000';
+const TOURNAMENT_API_URL = process.env.TOURNAMENT_API_URL || 'http://localhost:3000';
 
 async function apiCall(endpoint, method = 'GET', body = null) {
   const options = {
@@ -12,7 +12,7 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+  const response = await fetch(`${TOURNAMENT_API_URL}${endpoint}`, options);
 
   // Check if the response status code indicates an error.
   if (!response.ok) {
@@ -93,6 +93,11 @@ async function createMatch(tournament_id, participant1, participant2) {
   return response;
 }
 
+async function decayElo(tournament_id) {
+  const response = await apiCall(`/tournaments/${tournament_id}/decay-elo`, 'POST');
+  return response;
+}
+
 module.exports = {
   getMembers,
   searchMembers,
@@ -107,4 +112,5 @@ module.exports = {
   getMatches,
   createMatch,
   updateMatch,
+  decayElo,
 };
