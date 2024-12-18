@@ -603,7 +603,8 @@ exports.decayElo = async (req, res) => {
     for (const participant of participants) {
       const oldElo = participant.elo;
       const updatedParticipant = decayElo(participant, currentDate);
-      await updatedParticipant.save();
+      await participant.update({ elo: updatedParticipant.elo });
+
       updatedParticipants.push({
         participantId: participant.id,
         memberId: participant.member.id,
