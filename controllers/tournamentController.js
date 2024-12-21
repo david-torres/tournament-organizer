@@ -593,7 +593,6 @@ exports.decayElo = async (req, res) => {
       return res.status(404).json({ error: 'No tournaments in progress' });
     }
 
-    const currentDate = new Date();
     const participants = await Participant.findAll({
       where: { tournamentId: tournament.id },
       include: { model: Member, as: 'member' },
@@ -602,8 +601,18 @@ exports.decayElo = async (req, res) => {
     const updatedParticipants = [];
 
     for (const participant of participants) {
+      // find last match for this tournament that this participant was in
+      const lastMatch = await Match.findOne({
+        where: {
+          tournamentId: tournament.id,
+          [Op.or]: [{ player1Id: participant.id }, { player2Id: participant.id }],
+          winnerId: { [Op.ne]: null },
+        },
+        order: [['updatedAt', 'DESC']],
+      });
+
       const oldElo = participant.elo;
-      const updatedParticipant = decayElo(participant, currentDate);
+      const updatedParticipant = decayElo(participant, lastMatch.updatedAt, new Date());
       await participant.update({ elo: updatedParticipant.elo });
 
       updatedParticipants.push({
