@@ -25,29 +25,38 @@ exports.updateElo = async (target1, target2, winnerId) => {
   await target2.update({ elo: newElo2 });
 }
 
-exports.decayElo = (participant, lastActiveDate, currentDate, customDecaySettings = null) => {
+exports.decayElo = (participant, lastActiveDate, currentDate, customDecaySettings = null ) => {
   const defaultDecaySettings = [
-      { threshold: 10, decayPerDay: 1, minElo: 0, maxElo: 1200 },
-      { threshold: 7, decayPerDay: 3, minElo: 1201, maxElo: 1800 },
-      { threshold: 3, decayPerDay: 5, minElo: 1801, maxElo: Infinity }
+    { threshold: 10, decayPerDay: 1, minElo: 0,    maxElo: 1200 },
+    { threshold: 7,  decayPerDay: 3, minElo: 1201, maxElo: 1800 },
+    { threshold: 3,  decayPerDay: 5, minElo: 1801, maxElo: Infinity },
   ];
 
   const decaySettings = customDecaySettings || defaultDecaySettings;
+  
+  const daysInactive = Math.floor((currentDate - lastActiveDate) / (1000 * 3600 * 24));
+  let participantElo = parseFloat(participant.elo) || 0;
 
-  const daysInactive = (currentDate - lastActiveDate) / (1000 * 3600 * 24);
+  for (let day = 1; day <= daysInactive; day++) {
+    const tier = decaySettings.find(
+      t => participantElo >= t.minElo && participantElo <= t.maxElo
+    );
+    
+    if (!tier) break;
 
-  const participantElo = parseFloat(participant.elo) || 0;
-  const tier = decaySettings.find(tier => participantElo >= tier.minElo && participantElo <= tier.maxElo);
-
-  if (tier && daysInactive > tier.threshold) {
-      const daysOverThreshold = daysInactive - tier.threshold;
-      const eloDecay = daysOverThreshold * tier.decayPerDay;
-
-      participant.elo = Math.max((participantElo - eloDecay).toFixed(2), tier.minElo);
+    if (day > tier.threshold) {
+      participantElo -= tier.decayPerDay;
+      if (participantElo < 0) {
+        participantElo = 0;
+        break;
+      }
+    }
   }
 
+  participant.elo = participantElo.toFixed(2);
   return participant;
-}
+};
+
 
 exports.generateBracketImage = async (bracketHtml) => {
   try {
