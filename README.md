@@ -1,15 +1,18 @@
 # Tournament Organizer API
 
-A REST API for creating and managing tournaments (single-elimination or round-robin), participants, and matches, with support for Elo ratings and bracket visualization.
+A REST API for creating and managing tournaments, participants, and matches, with support for Elo ratings and bracket visualization.
+
+## Tournament Types Supported
+- Single-elimination
+- Round robin
+- Swiss
+- League
 
 ## Features
 
-- Create new members (participants)
-- Create single-elimination tournaments
-- Create round-robin tournaments
-- Allow members to join tournaments
-- Generate randomized matches, supporting byes for players with the highest Elo scores
+- Generate randomized matches, supporting byes for the highest ranked players
 - Track member Elo scores across matches and tournaments
+- Leagues for regularly starting with a fresh Elo score and configurable Elo decay after a period of non-participation
 - Generate a bracket graphic for visualizing the tournament
 
 ## Getting Started
@@ -46,12 +49,15 @@ The API server will be running at `http://localhost:3000`.
 | GET    | /members/search?name=NAME              | Search for a member by name                        |
 | POST   | /members                               | Create a new member                                |
 | POST   | /tournaments                           | Create a new tournament                            |
+| GET    | /tournaments/latest                    | Get the most current active tournament             |
 | GET    | /tournaments/:id/participants          | Get a list of tournament participants              |
 | POST   | /tournaments/:id/participants          | Add a member to a tournament                       |
 | POST   | /tournaments/:id/start                 | Generate matches to start a tournament             |
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
 | PATCH  | /tournaments/:id/matches/:id           | Update a match (set the winner)                    |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
+| POST   | /tournaments/:id/league                | End a league tournament                            |
+| POST   | /tournaments/:id/decay-elo             | Decay Elo scores for a league                      |
 
 ## Bracket Visualization
 
@@ -67,9 +73,23 @@ PNG
 
 ## Running the Simulation Script
 
-You can run the `simulate-tournament.js` script to simulate the entire flow of adding members, creating a tournament, participants joining, generating matches, and randomly assigning winners until the tournament is complete:
+You can run the `simulate-tournament.js` script to simulate the entire flow of adding members, creating a tournament, participants joining, generating matches, and randomly assigning winners until the tournament is complete. Helpers have been added to package.json and can be run using npm:
 
-    node simulate-tournament.js
+Single Elimination:
+
+    npm run sim-single-elim
+
+Round Robin:
+
+    npm run sim-round-robin
+
+Swiss:
+
+    npm run sim-swiss
+
+League:
+
+    npm run sim-league
 
 ## AI Disclosure
 
