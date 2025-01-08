@@ -141,6 +141,64 @@ function generateRoundRobinMatches(participants) {
   return matches;
 }
 
+// Generate Swiss system matchups for the current round
+function generateSwissMatches(participants, existingMatches = []) {
+  // Sort participants by score (wins) and then by elo
+  participants.sort((a, b) => {
+    const aScore = existingMatches.filter(m =>
+      m.winnerId === a.id
+    ).length;
+    const bScore = existingMatches.filter(m =>
+      m.winnerId === b.id
+    ).length;
+
+    if (bScore !== aScore) {
+      return bScore - aScore;
+    }
+    return b.elo - a.elo;
+  });
+
+  const matches = [];
+  const paired = new Set();
+  const currentRound = existingMatches.length > 0 ?
+    Math.max(...existingMatches.map(m => m.round)) + 1 : 1;
+
+  // Handle unpaired player if odd number (gets a bye)
+  if (participants.length % 2 !== 0) {
+    const byePlayer = participants.pop();
+    matches.push({
+      round: currentRound,
+      player1Id: byePlayer.id,
+      player2Id: null, // bye
+    });
+    paired.add(byePlayer.id);
+  }
+
+  // Try to pair players with similar scores
+  for (let i = 0; i < participants.length; i++) {
+    if (paired.has(participants[i].id)) continue;
+
+    // Look for closest unpaired opponent
+    for (let j = i + 1; j < participants.length; j++) {
+      const player1 = participants[i];
+      const player2 = participants[j];
+
+      if (!paired.has(player2.id)) {
+        matches.push({
+          round: currentRound,
+          player1Id: player1.id,
+          player2Id: player2.id,
+        });
+        paired.add(player1.id);
+        paired.add(player2.id);
+        break;
+      }
+    }
+  }
+
+  return matches;
+}
+
 // Start the tournament by generating matches for a single elimination tournament with byes based on Elo scores and random match-ups
 exports.startTournament = async (req, res) => {
   try {
@@ -162,6 +220,10 @@ exports.startTournament = async (req, res) => {
         }
         case 'round_robin': {
           matches = generateRoundRobinMatches(tournament.participants);
+          break;
+        }
+        case 'swiss': {
+          matches = generateSwissMatches(tournament.participants);
           break;
         }
         case 'league': {
@@ -300,6 +362,52 @@ async function advanceRoundRobin(tournament) {
   }
 }
 
+// Check if all matches have been completed and generate new matches for Swiss tournament
+async function advanceSwiss(tournament) {
+  try {
+    const matches = await Match.findAll({
+      where: { tournamentId: tournament.id },
+      order: [['round', 'DESC']],
+    });
+
+    const participants = tournament.participants;
+    const latestRound = matches.length > 0 ? matches[0].round : 0;
+    const currentRoundMatches = matches.filter(m => m.round === latestRound);
+    const completedMatches = currentRoundMatches.filter(m => m.winnerId !== null);
+
+    // If all matches in current round are complete
+    if (completedMatches.length === currentRoundMatches.length) {
+      // Check if we've reached the maximum number of rounds
+      // Swiss typically uses log2(n) rounded up + 1 rounds
+      const maxRounds = Math.ceil(Math.log2(participants.length)) + 1;
+
+      if (latestRound >= maxRounds) {
+        // Tournament is complete - update winner based on most wins
+        const playerScores = participants.map(p => ({
+          participant: p,
+          wins: matches.filter(m => m.winnerId === p.id).length
+        }));
+
+        playerScores.sort((a, b) => b.wins - a.wins || b.participant.elo - a.participant.elo);
+        await tournament.update({
+          status: 'completed',
+          winnerId: playerScores[0].participant.memberId
+        });
+        return;
+      }
+
+      // Generate next round matches
+      const newMatches = generateSwissMatches(participants, matches);
+      await Match.bulkCreate(newMatches.map(match => ({
+        ...match,
+        tournamentId: tournament.id
+      })));
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 // Create a match with provided participants
 exports.createMatch = async (req, res) => {
   const tournamentId = req.params.id;
@@ -401,7 +509,7 @@ exports.updateMatch = async (req, res) => {
       include: [
         { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
         { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'winner' },
+        { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
       ]
     });
 
@@ -417,7 +525,9 @@ exports.updateMatch = async (req, res) => {
       await updateElo(participant1, participant2, winnerId);
     } else {
       // calculate member scores for non-league tournament
-      await updateElo(participant1.member, participant2.member, winnerId);
+      if (participant1 && participant2) { // make sure not a bye
+        await updateElo(participant1.member, participant2.member, winnerId);
+      }
     }
 
     await match.update({ winnerId });
@@ -430,6 +540,10 @@ exports.updateMatch = async (req, res) => {
       }
       case 'round_robin': {
         await advanceRoundRobin(tournament);
+        break;
+      }
+      case 'swiss': {
+        await advanceSwiss(tournament);
         break;
       }
     }

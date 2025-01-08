@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node app.js",
     "init-db": "node init_db.js",
-    "sim-single-elim": "node simulate-tournament.js",
+    "sim-single-elim": "node simulate-tournament.js single_elimination",
+    "sim-round-robin": "node simulate-tournament.js round_robin",
+    "sim-swiss": "node simulate-tournament.js swiss",
     "sim-league": "node simulate-league.js"
   },
   "dependencies": {
