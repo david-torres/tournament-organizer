@@ -6,28 +6,12 @@
 
 const { faker } = require('@faker-js/faker');
 const client = require('./client');
+const { createMemberIfNotExists } = require('./utils/simulation');
 
 const TOURNAMENT_TYPE = 'league';
 const PLAYER_COUNT = 8;
 
 const memberNames = Array.from({ length: PLAYER_COUNT }, () => faker.name.fullName());
-
-async function createMemberIfNotExists(name) {
-    try {
-        const existingMember = await client.searchMembers(name);
-
-        if ('rows' in existingMember && existingMember['rows'].length > 0) {
-            console.log(`Fetched member ${name}`);
-            return existingMember['rows'][0];
-        }
-
-        console.log(`Created member ${name}`);
-        return await client.createMember(name);
-    } catch (error) {
-        console.error(`Error creating member: ${error.message}`);
-        throw error;
-    }
-}
 
 function displayMatchResults(matches) {
     console.log('\nMatch results:');
@@ -53,9 +37,9 @@ async function main() {
         const tournamentId = tournament.id;
         console.log(`Created tournament: ${tournament.name} with ID: ${tournament.id}`);
 
-        const members = await Promise.all(memberNames.map(createMemberIfNotExists)).catch(error => {
-            console.log(error.message);
-        });
+        const members = await Promise.all(
+            memberNames.map((name) => createMemberIfNotExists(client, name))
+        );
 
         await Promise.all(members.map((member) => client.addParticipant(tournamentId, member.id))).catch(error => {
             console.log(error.message);
@@ -104,32 +88,35 @@ async function main() {
 
             // create the matches
             console.log(`Creating ${matchCount} matches`);
-            const matches = await Promise.all(Array.from({ length: matchCount }, async (_, index) => {
-                // fetch two participants from the list
-                const match = matchParticipants[index];
-                const player1Id = match[0];
-                const player2Id = match[1];
+            let matches;
+            try {
+                matches = await Promise.all(Array.from({ length: matchCount }, async (_, index) => {
+                    // fetch two participants from the list
+                    const match = matchParticipants[index];
+                    const player1Id = match[0];
+                    const player2Id = match[1];
 
-                console.log(`Creating match: ${player1Id} vs ${player2Id}`);
-                return client.createMatch(tournamentId, player1Id, player2Id)
-            })).then((matches) => {
-                return matches;
-            }).catch(error => {
+                    console.log(`Creating match: ${player1Id} vs ${player2Id}`);
+                    return client.createMatch(tournamentId, player1Id, player2Id)
+                }));
+            } catch (error) {
                 console.log(error.message);
-            });
+                continue;
+            }
 
             // Simulate the matches
-            const matchResults = await Promise.all(matches.map((match) => {
-                const winnerId = Math.random() < 0.5 ? match.player1.id : match.player2.id;
-                // get the winning member name
-                const winnerName = winnerId === match.player1.id ? match.player1.member.name : match.player2.member.name;
-                console.log(`Match ID: ${match.id} | ${match.player1.member.name} vs ${match.player2.member.name} | Winner: ${winnerName}`);
-                return client.updateMatch(tournamentId, match.id, winnerId);
-            })).then((matches) => {
-                return matches;
-            }).catch(error => {
+            try {
+                await Promise.all(matches.map((match) => {
+                    const winnerId = Math.random() < 0.5 ? match.player1.id : match.player2.id;
+                    // get the winning member name
+                    const winnerName = winnerId === match.player1.id ? match.player1.member.name : match.player2.member.name;
+                    console.log(`Match ID: ${match.id} | ${match.player1.member.name} vs ${match.player2.member.name} | Winner: ${winnerName}`);
+                    return client.updateMatch(tournamentId, match.id, winnerId);
+                }));
+            } catch (error) {
                 console.log(error.message);
-            });
+                continue;
+            }
 
             // mark the league as completed
             tournamentCompleted = await client.endTournament(tournamentId);

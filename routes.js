@@ -1,5 +1,5 @@
 const memberController = require('./controllers/memberController');
-const tournamentController = require('./controllers/tournamentController');
+const tournamentController = require('./controllers/tournament');
 
 module.exports = function (app) {
   // Members

@@ -26,10 +26,13 @@ Object.keys(models).forEach((modelName) => {
   }
 });
 
-sequelize.sync({ force: true })
-  .then(() => {
+const initializeDatabase = async () => {
+  try {
+    await sequelize.sync({ force: true });
     console.log('Database initialized successfully.');
-  })
-  .catch((error) => {
+  } catch (error) {
     console.error('Error initializing database:', error);
-  });
+  }
+};
+
+initializeDatabase();

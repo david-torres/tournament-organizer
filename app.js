@@ -14,15 +14,18 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Register routes
 routes(app);
 
-sequelize.authenticate()
-    .then(() => {
+const startServer = async () => {
+    try {
+        await sequelize.authenticate();
         console.log('Connection to the database has been established successfully.');
         app.listen(config[config.env].server_port, () => {
             console.log(`Tournament management API is running on port ${config[config.env].server_port}`);
         });
-    })
-    .catch((error) => {
+    } catch (error) {
         console.error('Unable to connect to the database:', error);
-    });
+    }
+};
+
+startServer();
 
 module.exports = app;
