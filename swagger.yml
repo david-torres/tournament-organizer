@@ -2,6 +2,7 @@ openapi: 3.0.0
 info:
   title: Tournament Management API
   version: 1.0.0
+  description: A REST API for creating and managing tournaments, participants, and matches, with support for Elo ratings and bracket visualization.
 paths:
   /members:
     post:
@@ -12,6 +13,8 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - name
               properties:
                 name:
                   type: string
@@ -28,7 +31,8 @@ paths:
                   name:
                     type: string
                   elo_score:
-                    type: integer
+                    type: number
+                    format: float
 
     get:
       summary: Get a list of all members
@@ -47,17 +51,49 @@ paths:
                     name:
                       type: string
                     elo_score:
+                      type: number
+                      format: float
+
+  /members/search:
+    get:
+      summary: Search for a member by name
+      parameters:
+        - in: query
+          name: name
+          required: true
+          schema:
+            type: string
+          description: Name to search for
+      responses:
+        '200':
+          description: List of matching members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
                       type: integer
+                    name:
+                      type: string
+                    elo_score:
+                      type: number
+                      format: float
 
   /tournaments:
     post:
-      summary: Create a new single elimination tournament
+      summary: Create a new tournament
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - name
+                - type
               properties:
                 name:
                   type: string
@@ -65,8 +101,14 @@ paths:
                   type: string
                   enum:
                     - single_elimination
+                    - round_robin
+                    - swiss
+                    - league
+                size:
+                  type: integer
+                  description: Required for single_elimination (must be power of 2)
       responses:
-        '200':
+        '201':
           description: New tournament created
           content:
             application/json:
@@ -78,6 +120,36 @@ paths:
                   name:
                     type: string
                   type:
+                    type: string
+                  size:
+                    type: integer
+                  status:
+                    type: string
+        '409':
+          description: Tournament name already exists
+        '500':
+          description: Server error
+
+  /tournaments/latest:
+    get:
+      summary: Get the most current active tournament
+      responses:
+        '200':
+          description: Latest tournament
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  type:
+                    type: string
+                  size:
+                    type: integer
+                  status:
                     type: string
 
   /tournaments/{id}/participants:
@@ -95,11 +167,13 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - member_id
               properties:
                 member_id:
                   type: integer
       responses:
-        '200':
+        '201':
           description: New participant added
           content:
             application/json:
@@ -108,10 +182,14 @@ paths:
                 properties:
                   id:
                     type: integer
-                  member_id:
+                  memberId:
                     type: integer
-                  tournament_id:
+                  tournamentId:
                     type: integer
+        '404':
+          description: Tournament or member not found
+        '500':
+          description: Server error
 
     get:
       summary: Get a list of participants in a tournament
@@ -133,14 +211,14 @@ paths:
                   properties:
                     id:
                       type: integer
-                    member_id:
+                    memberId:
                       type: integer
-                    tournament_id:
+                    tournamentId:
                       type: integer
 
-  /tournaments/{id}/generate_matches:
+  /tournaments/{id}/start:
     post:
-      summary: Generate matches for a single elimination tournament
+      summary: Generate matches to start a tournament
       parameters:
         - in: path
           name: id
@@ -149,7 +227,41 @@ paths:
           required: true
       responses:
         '200':
-          description: Matches generated
+          description: Tournament started, matches generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Tournament has already been started
+        '404':
+          description: Tournament not found
+        '500':
+          description: Server error
+
+  /tournaments/{id}/matches:
+    get:
+      summary: Get the list of matches for a tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - pending
+              - completed
+          description: Filter matches by status
+      responses:
+        '200':
+          description: List of matches
           content:
             application/json:
               schema:
@@ -159,38 +271,31 @@ paths:
                   properties:
                     id:
                       type: integer
-                    tournament_id:
+                    tournamentId:
                       type: integer
                     round:
                       type: integer
-                    participant1_id:
+                    player1Id:
                       type: integer
-                    participant2_id:
+                      nullable: true
+                    player2Id:
                       type: integer
-                    winner_id:
+                      nullable: true
+                    winnerId:
                       type: integer
+                      nullable: true
+                    player1:
+                      type: object
+                    player2:
+                      type: object
+                    winner:
+                      type: object
+                      nullable: true
+        '404':
+          description: Tournament not found
 
-  /tournaments/{id}/bracket:
-    get:
-      summary: Generate a bracket graphic for the tournament
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: integer
-          required: true
-      responses:
-        '200':
-          description: Bracket graphic generated
-          content:
-            image/svg+xml:
-              schema:
-                type: string
-                format: binary
-
-  /matches/{id}:
-    put:
-      summary: Update a match result and update participant Elo scores
+    post:
+      summary: Create a new match (league tournaments only)
       parameters:
         - in: path
           name: id
@@ -203,6 +308,63 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - participant1
+                - participant2
+              properties:
+                participant1:
+                  type: integer
+                participant2:
+                  type: integer
+      responses:
+        '201':
+          description: Match created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  tournamentId:
+                    type: integer
+                  round:
+                    type: integer
+                  player1Id:
+                    type: integer
+                  player2Id:
+                    type: integer
+        '400':
+          description: Cannot create matches for a non-league tournament
+        '404':
+          description: Tournament or participant not found
+        '409':
+          description: Participants have an unresolved match
+        '500':
+          description: Server error
+
+  /tournaments/{id}/matches/{match_id}:
+    patch:
+      summary: Update a match (set the winner)
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+        - in: path
+          name: match_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - winner_id
               properties:
                 winner_id:
                   type: integer
@@ -216,13 +378,119 @@ paths:
                 properties:
                   id:
                     type: integer
-                  tournament_id:
+                  tournamentId:
                     type: integer
                   round:
                     type: integer
-                  participant1_id:
+                  player1Id:
                     type: integer
-                  participant2_id:
+                  player2Id:
                     type: integer
-                  winner_id:
+                  winnerId:
                     type: integer
+        '404':
+          description: Tournament or match not found
+        '500':
+          description: Server error
+
+  /tournaments/{id}/bracket:
+    get:
+      summary: Get the bracket data for a tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum:
+              - json
+              - html
+              - image
+            default: json
+          description: Format of the bracket output
+      responses:
+        '200':
+          description: Bracket data
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Bracket data in JSON format (when format=json)
+            text/html:
+              schema:
+                type: string
+                description: Bracket as HTML (when format=html)
+            image/png:
+              schema:
+                type: string
+                format: binary
+                description: Bracket as PNG image (when format=image)
+        '400':
+          description: Invalid format specified
+        '404':
+          description: Tournament not found
+
+  /tournaments/{id}/league:
+    post:
+      summary: End a league tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: League tournament ended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Tournament not found
+        '500':
+          description: Server error
+
+  /tournaments/{id}/decay-elo:
+    post:
+      summary: Decay Elo scores for a league
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                days_inactive:
+                  type: integer
+                  description: Number of days of inactivity before decay
+                decay_percentage:
+                  type: number
+                  format: float
+                  description: Percentage of Elo to decay
+      responses:
+        '200':
+          description: Elo scores decayed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: Tournament not found
+        '500':
+          description: Server error

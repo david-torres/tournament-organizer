@@ -34,12 +34,43 @@ A REST API for creating and managing tournaments, participants, and matches, wit
 
     npm install
 
-3. Start the API server:
+3. Set up environment variables (optional):
+
+    Create a `.env` file in the root directory with the following variables:
+    
+    ```
+    NODE_ENV=development
+    DB_USERNAME=your_db_username
+    DB_PASSWORD=your_db_password
+    DB_NAME=your_database_name
+    DB_HOST=localhost
+    DB_PORT=5432
+    DB_DIALECT=sqlite
+    DB_STORAGE=./data/tournaments.db
+    PORT=3000
+    ```
+    
+    For SQLite (default), you typically only need:
+    ```
+    NODE_ENV=development
+    DB_DIALECT=sqlite
+    DB_STORAGE=./data/tournaments.db
+    PORT=3000
+    ```
+
+4. Initialize the database (optional, if starting fresh):
+
+    npm run init-db
+
+5. Start the API server:
+
+    npm start
+
+    Or:
 
     node app.js
 
-
-The API server will be running at `http://localhost:3000`.
+The API server will be running at `http://localhost:3000` (or the port specified in your `PORT` environment variable).
 
 ## API Endpoints
 
@@ -54,22 +85,29 @@ The API server will be running at `http://localhost:3000`.
 | POST   | /tournaments/:id/participants          | Add a member to a tournament                       |
 | POST   | /tournaments/:id/start                 | Generate matches to start a tournament             |
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
-| PATCH  | /tournaments/:id/matches/:id           | Update a match (set the winner)                    |
+| GET    | /tournaments/:id/matches?status=STATUS | Get matches filtered by status (pending/completed)  |
+| POST   | /tournaments/:id/matches               | Create a new match (league tournaments only)       |
+| PATCH  | /tournaments/:id/matches/:match_id     | Update a match (set the winner)                    |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
 | POST   | /tournaments/:id/league                | End a league tournament                            |
 | POST   | /tournaments/:id/decay-elo             | Decay Elo scores for a league                      |
 
 ## Bracket Visualization
 
-You can get an HTML or PNG representation of the tournament bracket by calling:
+You can get a JSON, HTML, or PNG representation of the tournament bracket by calling:
+
+JSON (default)
+
+    GET http://localhost:3000/tournaments/:id/bracket
+    GET http://localhost:3000/tournaments/:id/bracket?format=json
 
 HTML
 
-    wget http://localhost:3000/tournaments/:id/bracket?format=html
+    GET http://localhost:3000/tournaments/:id/bracket?format=html
 
 PNG
 
-    wget http://localhost:3000/tournaments/:id/bracket?format=image
+    GET http://localhost:3000/tournaments/:id/bracket?format=image
 
 ## Running the Simulation Script
 
