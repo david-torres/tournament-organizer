@@ -3,6 +3,29 @@ const path = require('path');
 const { Tournament, Participant, Match, Member } = require('../../models');
 const { generateBracketImage } = require('../../utils');
 
+const MATCH_INCLUDES = [
+  { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
+  { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
+  { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
+];
+
+function serializeParticipant(participant) {
+  return {
+    id: participant?.member?.id,
+    name: participant?.member?.name,
+  };
+}
+
+function serializeMatch(match) {
+  return {
+    id: match.id,
+    round: match.round,
+    player1: serializeParticipant(match.player1),
+    player2: match.player2 ? serializeParticipant(match.player2) : null,
+    winner: match.winner ? serializeParticipant(match.winner) : null,
+  };
+}
+
 function getBracketData(matches) {
   const rounds = {};
 
@@ -12,24 +35,7 @@ function getBracketData(matches) {
       rounds[roundNumber] = [];
     }
 
-    rounds[roundNumber].push({
-      id: match.id,
-      round: roundNumber,
-      player1: {
-        id: match.player1.member.id,
-        name: match.player1.member.name,
-      },
-      player2: {
-        id: match.player2.member.id,
-        name: match.player2.member.name,
-      },
-      winner: match.winner
-        ? {
-            id: match.winner.member.id,
-            name: match.winner.member.name,
-          }
-        : null,
-    });
+    rounds[roundNumber].push(serializeMatch(match));
   });
 
   return rounds;
@@ -54,21 +60,17 @@ async function getBracket(req, res) {
 
     const matches = await Match.findAll({
       where: { tournamentId },
-      include: [
-        { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
-      ],
+      include: MATCH_INCLUDES,
       order: [['round', 'ASC'], ['id', 'ASC']],
     });
 
     const bracketData = getBracketData(matches);
 
     if (format === 'json') {
-      res.json(bracketData);
+      res.status(200).json(bracketData);
     } else if (format === 'html') {
       const html = await generateBracketHtml(tournament, bracketData);
-      res.send(html);
+      res.status(200).send(html);
     } else if (format === 'image') {
       const html = await generateBracketHtml(tournament, bracketData);
       const img = await generateBracketImage(html);
@@ -86,4 +88,3 @@ async function getBracket(req, res) {
 module.exports = {
   getBracket,
 };
-

@@ -7,6 +7,20 @@ const {
   advanceSwiss,
 } = require('../../services/tournamentAdvancers');
 
+const MATCH_INCLUDES = [
+  { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
+  { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
+  { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
+];
+
+function getEligibleWinnerIds(tournamentType, participant1, participant2) {
+  if (tournamentType === 'league') {
+    return [participant1.id, participant2.id];
+  }
+
+  return [participant1.member.id, participant2.member.id];
+}
+
 async function createMatch(req, res) {
   const tournamentId = req.params.id;
   const participant1Id = req.body.participant1;
@@ -59,11 +73,7 @@ async function createMatch(req, res) {
     });
 
     const match = await Match.findByPk(createdMatch.id, {
-      include: [
-        { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
-      ],
+      include: MATCH_INCLUDES,
     });
 
     res.status(201).json(match);
@@ -99,11 +109,7 @@ async function updateMatch(req, res) {
         id: matchId,
         tournamentId,
       },
-      include: [
-        { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
-      ],
+      include: MATCH_INCLUDES,
     });
 
     if (!match) {
@@ -112,6 +118,11 @@ async function updateMatch(req, res) {
 
     const participant1 = match.player1;
     const participant2 = match.player2;
+    const eligibleWinnerIds = getEligibleWinnerIds(tournament.type, participant1, participant2);
+
+    if (!eligibleWinnerIds.some((id) => String(id) === String(winnerId))) {
+      return res.status(400).json({ error: 'Winner must be one of the match participants' });
+    }
 
     if (tournament.type === 'league') {
       await updateElo(participant1, participant2, winnerId);
@@ -159,11 +170,7 @@ async function getMatches(req, res) {
 
     const matches = await Match.findAll({
       where: matchFilter,
-      include: [
-        { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
-        { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
-      ],
+      include: MATCH_INCLUDES,
       order: [['id', 'ASC']],
     });
 
@@ -179,4 +186,3 @@ module.exports = {
   updateMatch,
   getMatches,
 };
-

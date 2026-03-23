@@ -2,9 +2,10 @@
   "name": "tournament-management-api",
   "version": "1.0.0",
   "description": "A REST API for creating and managing Tournaments, Participants, and Matches.",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "node server.js",
+    "test": "NODE_ENV=test node --test",
     "init-db": "node init_db.js",
     "sim-single-elim": "node simulate-tournament.js single_elimination",
     "sim-round-robin": "node simulate-tournament.js round_robin",

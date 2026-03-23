@@ -5,6 +5,128 @@ function shuffleParticipants(participants) {
   }
 }
 
+function getPairKey(player1Id, player2Id) {
+  return [player1Id, player2Id].sort((a, b) => a - b).join('-');
+}
+
+function getSwissScores(participants, existingMatches) {
+  return participants.map((participant) => {
+    const wins = existingMatches.filter((match) => match.winnerId === participant.id).length;
+
+    return {
+      wins,
+      ...participant,
+    };
+  });
+}
+
+function sortSwissParticipants(participants, existingMatches) {
+  return [...getSwissScores(participants, existingMatches)].sort((a, b) => {
+    if (b.wins !== a.wins) {
+      return b.wins - a.wins;
+    }
+
+    return b.elo - a.elo;
+  });
+}
+
+function pairWithoutRematches(participants, blockedPairs) {
+  if (participants.length === 0) {
+    return [];
+  }
+
+  const [firstParticipant, ...remainingParticipants] = participants;
+
+  for (let index = 0; index < remainingParticipants.length; index++) {
+    const secondParticipant = remainingParticipants[index];
+    const pairKey = getPairKey(firstParticipant.id, secondParticipant.id);
+
+    if (blockedPairs.has(pairKey)) {
+      continue;
+    }
+
+    const nextParticipants = [
+      ...remainingParticipants.slice(0, index),
+      ...remainingParticipants.slice(index + 1),
+    ];
+    const restOfPairs = pairWithoutRematches(nextParticipants, blockedPairs);
+
+    if (restOfPairs) {
+      return [
+        {
+          player1Id: firstParticipant.id,
+          player2Id: secondParticipant.id,
+        },
+        ...restOfPairs,
+      ];
+    }
+  }
+
+  return null;
+}
+
+function toRoundMatches(round, pairings) {
+  return pairings.map((match) => ({
+    round,
+    ...match,
+  }));
+}
+
+function buildSwissBlockedPairs(participants, existingMatches, currentRound) {
+  const blockedPairs = new Set();
+
+  for (let round = 1; round < currentRound; round++) {
+    const historicalMatches = existingMatches.filter((match) => match.round < round);
+    const roundMatches = generateSwissRound(participants, historicalMatches, blockedPairs);
+
+    roundMatches.forEach((match) => {
+      if (match.player2Id !== null) {
+        blockedPairs.add(getPairKey(match.player1Id, match.player2Id));
+      }
+    });
+  }
+
+  return blockedPairs;
+}
+
+function generateSwissRound(participants, existingMatches = [], blockedPairs = new Set()) {
+  const sortedParticipants = sortSwissParticipants(participants, existingMatches);
+  const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((match) => match.round)) + 1 : 1;
+  const blockedPairKeys = new Set(blockedPairs);
+
+  if (sortedParticipants.length % 2 !== 0) {
+    for (let byeIndex = sortedParticipants.length - 1; byeIndex >= 0; byeIndex--) {
+      const byeParticipant = sortedParticipants[byeIndex];
+      const remainingParticipants = [
+        ...sortedParticipants.slice(0, byeIndex),
+        ...sortedParticipants.slice(byeIndex + 1),
+      ];
+      const pairings = pairWithoutRematches(remainingParticipants, blockedPairKeys);
+
+      if (pairings) {
+        return [
+          {
+            round: currentRound,
+            player1Id: byeParticipant.id,
+            player2Id: null,
+          },
+          ...toRoundMatches(currentRound, pairings),
+        ];
+      }
+    }
+
+    return [];
+  }
+
+  const pairings = pairWithoutRematches(sortedParticipants, blockedPairKeys);
+
+  if (!pairings) {
+    return [];
+  }
+
+  return toRoundMatches(currentRound, pairings);
+}
+
 function generateSingleEliminationMatches(participants) {
   const matches = [];
   let matchIndex = 0;
@@ -29,19 +151,20 @@ function generateSingleEliminationMatches(participants) {
 function generateRoundRobinMatches(participants) {
   const matches = [];
   const workingParticipants = [...participants];
-  const rounds = workingParticipants.length % 2 === 0 ? workingParticipants.length - 1 : workingParticipants.length;
-  const numberOfMatches = workingParticipants.length / 2;
 
   if (workingParticipants.length % 2 !== 0) {
     workingParticipants.push({ id: null });
   }
 
-  for (let round = 1; round <= rounds; round++) {
-    for (let match = 1; match <= numberOfMatches; match++) {
-      const player1 = workingParticipants[match - 1];
-      const player2 = workingParticipants[workingParticipants.length - match];
+  const totalRounds = workingParticipants.length - 1;
+  const matchCountPerRound = workingParticipants.length / 2;
 
-      if (player1.id !== player2.id && player1.id !== null && player2.id !== null) {
+  for (let round = 1; round <= totalRounds; round++) {
+    for (let index = 0; index < matchCountPerRound; index++) {
+      const player1 = workingParticipants[index];
+      const player2 = workingParticipants[workingParticipants.length - 1 - index];
+
+      if (player1.id !== null && player2.id !== null) {
         matches.push({
           round,
           player1Id: player1.id,
@@ -50,63 +173,19 @@ function generateRoundRobinMatches(participants) {
       }
     }
 
-    const firstParticipant = workingParticipants.shift();
-    const secondParticipant = workingParticipants.shift();
-    workingParticipants.push(firstParticipant);
-    workingParticipants.unshift(secondParticipant);
+    const fixedParticipant = workingParticipants[0];
+    const rotatingParticipants = workingParticipants.slice(1);
+    rotatingParticipants.unshift(rotatingParticipants.pop());
+    workingParticipants.splice(0, workingParticipants.length, fixedParticipant, ...rotatingParticipants);
   }
 
   return matches;
 }
 
 function generateSwissMatches(participants, existingMatches = []) {
-  const sortedParticipants = [...participants];
-
-  sortedParticipants.sort((a, b) => {
-    const aScore = existingMatches.filter((m) => m.winnerId === a.id).length;
-    const bScore = existingMatches.filter((m) => m.winnerId === b.id).length;
-
-    if (bScore !== aScore) {
-      return bScore - aScore;
-    }
-    return b.elo - a.elo;
-  });
-
-  const matches = [];
-  const paired = new Set();
-  const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((m) => m.round)) + 1 : 1;
-
-  if (sortedParticipants.length % 2 !== 0) {
-    const byePlayer = sortedParticipants.pop();
-    matches.push({
-      round: currentRound,
-      player1Id: byePlayer.id,
-      player2Id: null,
-    });
-    paired.add(byePlayer.id);
-  }
-
-  for (let i = 0; i < sortedParticipants.length; i++) {
-    if (paired.has(sortedParticipants[i].id)) continue;
-
-    for (let j = i + 1; j < sortedParticipants.length; j++) {
-      const player1 = sortedParticipants[i];
-      const player2 = sortedParticipants[j];
-
-      if (!paired.has(player2.id)) {
-        matches.push({
-          round: currentRound,
-          player1Id: player1.id,
-          player2Id: player2.id,
-        });
-        paired.add(player1.id);
-        paired.add(player2.id);
-        break;
-      }
-    }
-  }
-
-  return matches;
+  const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((match) => match.round)) + 1 : 1;
+  const blockedPairs = buildSwissBlockedPairs(participants, existingMatches, currentRound);
+  return generateSwissRound(participants, existingMatches, blockedPairs);
 }
 
 module.exports = {
@@ -114,4 +193,3 @@ module.exports = {
   generateRoundRobinMatches,
   generateSwissMatches,
 };
-

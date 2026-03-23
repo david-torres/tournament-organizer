@@ -22,6 +22,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'pending',
     },
+    winnerId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      // Stores the winning participant id, not the member id.
+    },
   }, {
     freezeTableName: true,
     indexes: [

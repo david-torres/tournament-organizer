@@ -1,6 +1,13 @@
 const { Match } = require('../models');
 const { generateSwissMatches } = require('./matchGenerators');
 
+async function completeTournament(tournament, winnerParticipantId) {
+  await tournament.update({
+    status: 'completed',
+    winnerId: winnerParticipantId,
+  });
+}
+
 async function advanceSingleElimination(tournament) {
   try {
     const matches = await Match.findAll({
@@ -21,7 +28,7 @@ async function advanceSingleElimination(tournament) {
 
       if (winners.length === 1) {
         console.log('All rounds complete.');
-        await tournament.update({ winnerId: winners[0], status: 'completed' });
+        await completeTournament(tournament, winners[0]);
         return;
       }
 
@@ -97,10 +104,7 @@ async function advanceSwiss(tournament) {
         }));
 
         playerScores.sort((a, b) => b.wins - a.wins || b.participant.elo - a.participant.elo);
-        await tournament.update({
-          status: 'completed',
-          winnerId: playerScores[0].participant.memberId,
-        });
+        await completeTournament(tournament, playerScores[0].participant.id);
         return;
       }
 
@@ -122,4 +126,3 @@ module.exports = {
   advanceRoundRobin,
   advanceSwiss,
 };
-

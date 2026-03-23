@@ -7,11 +7,38 @@ const {
   generateSwissMatches,
 } = require('../../services/matchGenerators');
 
+const MATCH_GENERATORS = {
+  single_elimination: generateSingleEliminationMatches,
+  round_robin: generateRoundRobinMatches,
+  swiss: generateSwissMatches,
+  league: () => null,
+};
+
+function getLeagueWinnerParticipantId(winnerParticipant) {
+  return winnerParticipant.id;
+}
+
+function hasReachedParticipantLimit(tournament, participantCount) {
+  return tournament.type === 'single_elimination' && participantCount === tournament.size;
+}
+
+function getTournamentMatchesPayload(tournament, matches) {
+  return matches.map((match) => ({
+    round: match.round,
+    player1Id: match.player1Id ?? null,
+    player2Id: match.player2Id ?? null,
+    tournamentId: tournament.id,
+  }));
+}
+
 async function createTournament(req, res) {
   try {
-    const params = req.body;
-    if (params.type === 'single_elimination' && !isPowerOfTwo(params.size)) {
-      throw new Error('Single elimination tournament `size` must be a power of 2 (2, 4, 8, 16...');
+    const { type, size } = req.body;
+
+    if (type === 'single_elimination' && !isPowerOfTwo(size)) {
+      return res.status(400).json({
+        error: 'Single elimination tournament `size` must be a power of 2 (2, 4, 8, 16...',
+      });
     }
     const newTournament = await Tournament.create(req.body);
     res.status(201).json(newTournament);
@@ -43,7 +70,7 @@ async function addParticipant(req, res) {
         where: { tournamentId },
       });
 
-      if (participants === tournament.size) {
+      if (hasReachedParticipantLimit(tournament, participants)) {
         return res.status(409).json({ error: 'Tournament player limit already met' });
       }
     }
@@ -90,14 +117,7 @@ async function startTournament(req, res) {
       return res.status(400).json({ error: 'Tournament has already been started' });
     }
 
-    const matchGenerators = {
-      single_elimination: generateSingleEliminationMatches,
-      round_robin: generateRoundRobinMatches,
-      swiss: generateSwissMatches,
-      league: () => null,
-    };
-
-    const generator = matchGenerators[tournament.type];
+    const generator = MATCH_GENERATORS[tournament.type];
     if (!generator) {
       throw new Error('Invalid tournament type');
     }
@@ -105,14 +125,7 @@ async function startTournament(req, res) {
     const matches = generator(tournament.participants);
 
     if (matches) {
-      await Match.bulkCreate(
-        matches.map((match) => ({
-          round: match.round,
-          player1Id: match.player1Id ? match.player1Id : null,
-          player2Id: match.player2Id ? match.player2Id : null,
-          tournamentId: tournament.id,
-        })),
-      );
+      await Match.bulkCreate(getTournamentMatchesPayload(tournament, matches));
     }
 
     await tournament.update({ status: 'in_progress' });
@@ -143,11 +156,10 @@ async function endTournament(req, res) {
     }
 
     const winner = tournament.participants[0];
-
-    const status = 'completed';
-    const winnerId = winner.member.id;
-
-    await tournament.update({ status, winnerId });
+    await tournament.update({
+      status: 'completed',
+      winnerId: getLeagueWinnerParticipantId(winner),
+    });
 
     res.status(200).json({ message: 'Tournament completed' });
   } catch (error) {
@@ -240,4 +252,3 @@ module.exports = {
   getLatestTournament,
   decayElo,
 };
-
