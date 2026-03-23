@@ -1,7 +1,8 @@
 export {};
 
 const { Op, UniqueConstraintError } = require('sequelize');
-const { Tournament, Participant, Match, Member } = require('../../models');
+const { loadSourceModule } = require('../../runtime/loadSourceModule');
+const { Tournament, Participant, Match, Member } = loadSourceModule('models');
 const { isPowerOfTwo, decayElo: applyDecay } = require('../../utils');
 const {
   generateSingleEliminationMatches,
@@ -29,6 +30,7 @@ function getTournamentMatchesPayload(tournament, matches) {
     round: match.round,
     player1Id: match.player1Id ?? null,
     player2Id: match.player2Id ?? null,
+    winnerId: match.player2Id === null ? match.player1Id : match.winnerId ?? null,
     tournamentId: tournament.id,
   }));
 }

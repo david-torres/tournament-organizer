@@ -1,7 +1,8 @@
 export {};
 
 const { Op } = require('sequelize');
-const { Tournament, Participant, Match, Member } = require('../../models');
+const { loadSourceModule } = require('../../runtime/loadSourceModule');
+const { Tournament, Participant, Match, Member } = loadSourceModule('models');
 const { updateElo } = require('../../utils');
 const {
   advanceSingleElimination,

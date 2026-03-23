@@ -2,8 +2,9 @@ export {};
 
 const ejs = require('ejs');
 const path = require('path');
-const { Tournament, Participant, Match, Member } = require('../../models');
-const { generateBracketImage } = require('../../utils');
+const { loadSourceModule } = require('../../runtime/loadSourceModule');
+const { Tournament, Participant, Match, Member } = loadSourceModule('models');
+const utils = loadSourceModule('utils');
 
 const MATCH_INCLUDES = [
   { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },
@@ -73,7 +74,12 @@ async function getBracket(req, res) {
       res.status(200).send(html);
     } else if (format === 'image') {
       const html = await generateBracketHtml(tournament, bracketData);
-      const img = await generateBracketImage(html);
+      const img = await utils.generateBracketImage(html);
+
+      if (!img) {
+        return res.status(500).json({ error: 'Unable to generate bracket image' });
+      }
+
       res.writeHead(200, { 'Content-Type': 'image/png' });
       res.end(img, 'binary');
     } else {

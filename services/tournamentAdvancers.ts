@@ -1,6 +1,7 @@
 export {};
 
-const { Match } = require('../models');
+const { loadSourceModule } = require('../runtime/loadSourceModule');
+const { Match } = loadSourceModule('models');
 const { generateSwissMatches } = require('./matchGenerators');
 
 async function completeTournament(tournament, winnerParticipantId) {
@@ -113,6 +114,7 @@ async function advanceSwiss(tournament) {
       await Match.bulkCreate(
         newMatches.map((match) => ({
           ...match,
+          winnerId: match.player2Id === null ? match.player1Id : match.winnerId ?? null,
           tournamentId: tournament.id,
         })),
       );

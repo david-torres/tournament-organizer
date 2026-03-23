@@ -6,6 +6,7 @@ const tournamentController = require('../controllers/tournament/tournamentContro
 const matchController = require('../controllers/tournament/matchController');
 const bracketController = require('../controllers/tournament/bracketController');
 const models = require('../models');
+const utils = require('../utils');
 
 function createRes() {
   return {
@@ -195,5 +196,65 @@ test('getBracket serializes a bye match without throwing', async () => {
   } finally {
     models.Tournament.findByPk = originalFindByPk;
     models.Match.findAll = originalFindAll;
+  }
+});
+
+test('getBracket renders swiss bye brackets as an image without throwing', async () => {
+  const originalFindByPk = models.Tournament.findByPk;
+  const originalFindAll = models.Match.findAll;
+  const originalGenerateBracketImage = utils.generateBracketImage;
+
+  models.Tournament.findByPk = async () => ({
+    id: 9,
+    name: 'Bye Image Bracket',
+    type: 'swiss',
+  });
+
+  models.Match.findAll = async () => ([
+    {
+      id: 12,
+      round: 1,
+      player1: {
+        member: {
+          id: 21,
+          name: 'Image Solo',
+        },
+      },
+      player2: null,
+      winner: {
+        member: {
+          id: 21,
+          name: 'Image Solo',
+        },
+      },
+    },
+  ]);
+
+  utils.generateBracketImage = async (html) => {
+    assert.match(html, /Image Solo/);
+    assert.match(html, /BYE/);
+    return Buffer.from('png');
+  };
+
+  try {
+    const req = {
+      params: {
+        id: '9',
+      },
+      query: {
+        format: 'image',
+      },
+    };
+    const res = createRes();
+
+    await bracketController.getBracket(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.deepStrictEqual(res.headers, { 'Content-Type': 'image/png' });
+    assert.deepStrictEqual(res.body, Buffer.from('png'));
+  } finally {
+    models.Tournament.findByPk = originalFindByPk;
+    models.Match.findAll = originalFindAll;
+    utils.generateBracketImage = originalGenerateBracketImage;
   }
 });

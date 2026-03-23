@@ -1,6 +1,7 @@
 export {};
 
-const { Member } = require('../models');
+const { loadSourceModule } = require('../runtime/loadSourceModule');
+const { Member } = loadSourceModule('models');
 
 const INITIAL_ELO = 1200;
 

@@ -39,6 +39,28 @@ async function addParticipant(tournamentId, memberId) {
   assert.equal(response.statusCode, 201);
 }
 
+async function startTournament(tournamentId) {
+  const response = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournamentId}/start`,
+  });
+
+  assert.equal(response.statusCode, 200);
+}
+
+async function getMatches(tournamentId, params = {}) {
+  const searchParams = new URLSearchParams(params).toString();
+  const suffix = searchParams ? `?${searchParams}` : '';
+
+  const response = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournamentId}/matches${suffix}`,
+  });
+
+  assert.equal(response.statusCode, 200);
+  return response.json();
+}
+
 test.beforeEach(async () => {
   await models.sequelize.sync({ force: true });
 });
@@ -59,20 +81,9 @@ test('PATCH /tournaments/:id/matches/:match_id accepts participant ids and compl
   await addParticipant(tournament.id, winnerMember.id);
   await addParticipant(tournament.id, loserMember.id);
 
-  const startResponse = await inject(app, {
-    method: 'POST',
-    url: `/tournaments/${tournament.id}/start`,
-  });
+  await startTournament(tournament.id);
 
-  assert.equal(startResponse.statusCode, 200);
-
-  const matchesResponse = await inject(app, {
-    method: 'GET',
-    url: `/tournaments/${tournament.id}/matches?status=pending`,
-  });
-  assert.equal(matchesResponse.statusCode, 200);
-
-  const pendingMatches = matchesResponse.json();
+  const pendingMatches = await getMatches(tournament.id, { status: 'pending' });
   assert.equal(pendingMatches.length, 1);
 
   const pendingMatch = pendingMatches[0];
@@ -86,13 +97,7 @@ test('PATCH /tournaments/:id/matches/:match_id accepts participant ids and compl
 
   assert.equal(updateResponse.statusCode, 200);
 
-  const completedMatchesResponse = await inject(app, {
-    method: 'GET',
-    url: `/tournaments/${tournament.id}/matches?status=completed`,
-  });
-  assert.equal(completedMatchesResponse.statusCode, 200);
-
-  const completedMatches = completedMatchesResponse.json();
+  const completedMatches = await getMatches(tournament.id, { status: 'completed' });
   assert.equal(completedMatches.length, 1);
   assert.equal(completedMatches[0].winner.id, winnerParticipantId);
 
@@ -118,12 +123,7 @@ test('GET /tournaments/:id/bracket?format=json returns bye matches for swiss tou
     await addParticipant(tournament.id, member.id);
   }
 
-  const startResponse = await inject(app, {
-    method: 'POST',
-    url: `/tournaments/${tournament.id}/start`,
-  });
-
-  assert.equal(startResponse.statusCode, 200);
+  await startTournament(tournament.id);
 
   const bracketResponse = await inject(app, {
     method: 'GET',
@@ -134,4 +134,75 @@ test('GET /tournaments/:id/bracket?format=json returns bye matches for swiss tou
   const roundOneMatches = bracketResponse.json()['1'];
   assert.equal(roundOneMatches.length, 2);
   assert.equal(roundOneMatches.filter((match) => match.player2 === null).length, 1);
+});
+
+test('Swiss tournaments auto-complete bye matches and still advance after the played match is updated', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Swiss Bye ${Date.now()}`,
+    type: 'swiss',
+    size: 3,
+  });
+
+  const members = await Promise.all([
+    createMember(`Bye One ${Date.now()}`),
+    createMember(`Bye Two ${Date.now()}`),
+    createMember(`Bye Three ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const completedRoundOneMatches = await getMatches(tournament.id, { status: 'completed' });
+  const byeMatch = completedRoundOneMatches.find((match) => match.player2 === null);
+  assert.ok(byeMatch, 'expected the swiss bye match to be auto-completed');
+  assert.equal(byeMatch.winner.id, byeMatch.player1.id);
+
+  const roundOneMatches = await getMatches(tournament.id, { status: 'pending' });
+  const playedMatch = roundOneMatches.find((match) => match.player2 !== null);
+
+  const playedUpdateResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${playedMatch.id}`,
+    payload: { winner_id: playedMatch.player1.id },
+  });
+
+  assert.equal(playedUpdateResponse.statusCode, 200);
+
+  const roundTwoMatches = await getMatches(tournament.id, { status: 'pending' });
+  assert.equal(roundTwoMatches.length, 1);
+  assert.equal(roundTwoMatches[0].round, 2);
+  assert.notEqual(roundTwoMatches[0].player2, null);
+});
+
+test('GET /tournaments/:id/bracket?format=html renders swiss bye matches as HTML', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Swiss Html ${Date.now()}`,
+    type: 'swiss',
+    size: 3,
+  });
+
+  const members = await Promise.all([
+    createMember(`Html One ${Date.now()}`),
+    createMember(`Html Two ${Date.now()}`),
+    createMember(`Html Three ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const bracketResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/bracket?format=html`,
+  });
+
+  assert.equal(bracketResponse.statusCode, 200);
+  assert.match(bracketResponse.headers['content-type'], /html/);
+  assert.match(bracketResponse.body, /BYE/);
+  assert.match(bracketResponse.body, /Html One|Html Two|Html Three/);
 });
