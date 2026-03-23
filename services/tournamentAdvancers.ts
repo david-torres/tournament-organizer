@@ -1,3 +1,5 @@
+export {};
+
 const { Match } = require('../models');
 const { generateSwissMatches } = require('./matchGenerators');
 
@@ -35,11 +37,11 @@ async function advanceSingleElimination(tournament) {
       const nextRound = latestRound + 1;
       const newMatches = [];
 
-      for (let i = 0; i < winners.length; i += 2) {
+      for (let index = 0; index < winners.length; index += 2) {
         newMatches.push({
           round: nextRound,
-          player1Id: winners[i],
-          player2Id: winners[i + 1],
+          player1Id: winners[index],
+          player2Id: winners[index + 1],
           tournamentId: tournament.id,
         });
       }

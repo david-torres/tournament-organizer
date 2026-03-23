@@ -68,7 +68,7 @@ A REST API for creating and managing tournaments, participants, and matches, wit
 
     Or:
 
-    node app.js
+    node server.js
 
 The API server will be running at `http://localhost:3000` (or the port specified in your `PORT` environment variable).
 
@@ -87,7 +87,7 @@ The API server will be running at `http://localhost:3000` (or the port specified
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
 | GET    | /tournaments/:id/matches?status=STATUS | Get matches filtered by status (pending/completed)  |
 | POST   | /tournaments/:id/matches               | Create a new match (league tournaments only)       |
-| PATCH  | /tournaments/:id/matches/:match_id     | Update a match (set the winner)                    |
+| PATCH  | /tournaments/:id/matches/:match_id     | Update a match (set the winner by participant id)  |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
 | POST   | /tournaments/:id/league                | End a league tournament                            |
 | POST   | /tournaments/:id/decay-elo             | Decay Elo scores for a league                      |

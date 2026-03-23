@@ -4,13 +4,14 @@
   "description": "A REST API for creating and managing Tournaments, Participants, and Matches.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "NODE_ENV=test node --test",
-    "init-db": "node init_db.js",
-    "sim-single-elim": "node simulate-tournament.js single_elimination",
-    "sim-round-robin": "node simulate-tournament.js round_robin",
-    "sim-swiss": "node simulate-tournament.js swiss",
-    "sim-league": "node simulate-league.js"
+    "build": "rm -rf dist && tsc -p tsconfig.json && mkdir -p dist && cp bracket.ejs dist/bracket.ejs",
+    "start": "npm run build && node server.js",
+    "test": "npm run build && NODE_ENV=test node --test --test-concurrency=1",
+    "init-db": "npm run build && node init_db.js",
+    "sim-single-elim": "npm run build && node simulate-tournament.js single_elimination",
+    "sim-round-robin": "npm run build && node simulate-tournament.js round_robin",
+    "sim-swiss": "npm run build && node simulate-tournament.js swiss",
+    "sim-league": "npm run build && node simulate-league.js"
   },
   "dependencies": {
     "@faker-js/faker": "^7.6.0",
@@ -37,6 +38,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "sequelize-cli": "^6.6.1"
+    "@types/node": "^25.5.0",
+    "light-my-request": "^6.6.0",
+    "sequelize-cli": "^6.6.1",
+    "typescript": "^5.9.3"
   }
 }

@@ -30,7 +30,7 @@ paths:
                     type: integer
                   name:
                     type: string
-                  elo_score:
+                  elo:
                     type: number
                     format: float
 
@@ -50,7 +50,7 @@ paths:
                       type: integer
                     name:
                       type: string
-                    elo_score:
+                    elo:
                       type: number
                       format: float
 
@@ -78,7 +78,7 @@ paths:
                       type: integer
                     name:
                       type: string
-                    elo_score:
+                    elo:
                       type: number
                       format: float
 
@@ -368,6 +368,7 @@ paths:
               properties:
                 winner_id:
                   type: integer
+                  description: Winning participant id for the match
       responses:
         '200':
           description: Match result updated
@@ -388,6 +389,8 @@ paths:
                     type: integer
                   winnerId:
                     type: integer
+        '400':
+          description: Winner must be one of the match participants
         '404':
           description: Tournament or match not found
         '500':

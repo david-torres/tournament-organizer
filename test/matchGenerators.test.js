@@ -47,3 +47,32 @@ test('generateSwissMatches assigns one bye and avoids rematches in later rounds'
     assert.ok(!roundOnePairs.has(pair), `unexpected rematch: ${pair}`);
   }
 });
+
+test('generateSwissMatches reads ids and elo from Sequelize-style model instances', () => {
+  const participants = [
+    {
+      get() {
+        return { id: 1, elo: 1500 };
+      },
+    },
+    {
+      get() {
+        return { id: 2, elo: 1400 };
+      },
+    },
+    {
+      get() {
+        return { id: 3, elo: 1300 };
+      },
+    },
+  ];
+
+  const matches = generateSwissMatches(participants);
+
+  assert.equal(matches.length, 2);
+  assert.equal(matches.filter((match) => match.player2Id === null).length, 1);
+
+  for (const match of matches) {
+    assert.notEqual(match.player1Id, undefined);
+  }
+});

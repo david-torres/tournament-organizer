@@ -11,6 +11,7 @@ const sequelize = new Sequelize(runtimeConfig.database, runtimeConfig.username, 
   host: runtimeConfig.host,
   port: runtimeConfig.port,
   dialect: runtimeConfig.dialect,
+  logging: runtimeConfig.logging ? console.log : false,
   storage: runtimeConfig.storage,
 });
 

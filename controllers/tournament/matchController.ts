@@ -1,3 +1,5 @@
+export {};
+
 const { Op } = require('sequelize');
 const { Tournament, Participant, Match, Member } = require('../../models');
 const { updateElo } = require('../../utils');
@@ -166,7 +168,7 @@ async function getMatches(req, res) {
       return res.status(404).json({ error: 'Tournament not found' });
     }
 
-    const matchFilter = { tournamentId: id };
+    const matchFilter: any = { tournamentId: id };
 
     if (status === 'completed') {
       matchFilter.winnerId = { [Op.ne]: null };
