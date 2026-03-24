@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const ejs = require('ejs');
 
 const memberController = require('../controllers/memberController');
 const tournamentController = require('../controllers/tournament/tournamentController');
@@ -28,6 +29,13 @@ function createRes() {
     writeHead(code, headers) {
       this.statusCode = code;
       this.headers = headers;
+    },
+    setHeader(name, value) {
+      if (!this.headers) {
+        this.headers = {};
+      }
+
+      this.headers[name] = value;
     },
     end(payload) {
       this.body = payload;
@@ -369,6 +377,88 @@ test('getBracket renders swiss bye brackets as an image without throwing', async
   } finally {
     models.Tournament.findByPk = originalFindByPk;
     models.Match.findAll = originalFindAll;
+    utils.generateBracketImage = originalGenerateBracketImage;
+  }
+});
+
+test('getBracket caches repeated image renders for the same tournament state', async () => {
+  const originalFindByPk = models.Tournament.findByPk;
+  const originalFindAll = models.Match.findAll;
+  const originalRenderFile = ejs.renderFile;
+  const originalGenerateBracketImage = utils.generateBracketImage;
+
+  let renderCount = 0;
+  let imageCount = 0;
+
+  bracketController.bracketRenderCache.clear();
+
+  models.Tournament.findByPk = async () => ({
+    id: 14,
+    name: 'Cached Bracket',
+    type: 'single_elimination',
+    updatedAt: '2026-03-24T00:00:00.000Z',
+  });
+
+  models.Match.findAll = async () => ([
+    {
+      id: 1,
+      round: 1,
+      player1Id: 1,
+      player2Id: 2,
+      winnerId: 1,
+      updatedAt: '2026-03-24T00:00:00.000Z',
+      player1: {
+        member: {
+          id: 1,
+          name: 'Cached One',
+        },
+      },
+      player2: {
+        member: {
+          id: 2,
+          name: 'Cached Two',
+        },
+      },
+      winner: {
+        member: {
+          id: 1,
+          name: 'Cached One',
+        },
+      },
+    },
+  ]);
+
+  ejs.renderFile = async () => {
+    renderCount += 1;
+    return '<html>cached bracket</html>';
+  };
+
+  utils.generateBracketImage = async () => {
+    imageCount += 1;
+    return Buffer.from('cached-png');
+  };
+
+  try {
+    const req = {
+      params: { id: '14' },
+      query: { format: 'image' },
+    };
+
+    const firstRes = createRes();
+    await bracketController.getBracket(req, firstRes);
+
+    const secondRes = createRes();
+    await bracketController.getBracket(req, secondRes);
+
+    assert.equal(firstRes.statusCode, 200);
+    assert.equal(secondRes.statusCode, 200);
+    assert.equal(renderCount, 1);
+    assert.equal(imageCount, 1);
+  } finally {
+    bracketController.bracketRenderCache.clear();
+    models.Tournament.findByPk = originalFindByPk;
+    models.Match.findAll = originalFindAll;
+    ejs.renderFile = originalRenderFile;
     utils.generateBracketImage = originalGenerateBracketImage;
   }
 });

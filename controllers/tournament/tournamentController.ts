@@ -5,6 +5,7 @@ const { loadSourceModule } = require('../../runtime/loadSourceModule');
 const { Tournament, Participant, Match, Member, sequelize } = loadSourceModule('models');
 const { isPowerOfTwo, decayElo: applyDecay } = require('../../utils');
 const { getStandingsForTournament } = require('../../services/standings');
+const { getPagination, setPaginationHeaders } = require('../../services/pagination');
 const {
   generateSingleEliminationMatches,
   generateRoundRobinMatches,
@@ -70,11 +71,19 @@ function canArchiveTournament(tournament) {
 
 async function getTournaments(req, res) {
   try {
-    const tournaments = await Tournament.findAll({
+    const pagination = getPagination(req.query);
+    if (pagination.error) {
+      return res.status(400).json({ error: pagination.error });
+    }
+
+    const { rows: tournaments, count } = await Tournament.findAndCountAll({
       where: getTournamentFilters(req.query),
       order: [['id', 'DESC']],
+      limit: pagination.limit,
+      offset: pagination.offset,
     });
 
+    setPaginationHeaders(res, count, pagination.page, pagination.limit);
     res.json(tournaments);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -158,15 +167,27 @@ async function addParticipant(req, res) {
 
 async function getParticipants(req, res) {
   try {
-    const tournament = await Tournament.findByPk(req.params.id, {
-      include: { model: Participant, as: 'participants', include: { model: Member, as: 'member' } },
-    });
+    const pagination = getPagination(req.query);
+    if (pagination.error) {
+      return res.status(400).json({ error: pagination.error });
+    }
+
+    const tournament = await Tournament.findByPk(req.params.id);
 
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found' });
     }
 
-    res.json(tournament.participants);
+    const { rows: participants, count } = await Participant.findAndCountAll({
+      where: { tournamentId: tournament.id },
+      include: { model: Member, as: 'member' },
+      order: [['id', 'ASC']],
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+
+    setPaginationHeaders(res, count, pagination.page, pagination.limit);
+    res.json(participants);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

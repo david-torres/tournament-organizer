@@ -11,6 +11,9 @@ const MATCH_INCLUDES = [
   { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
   { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
 ];
+const BRACKET_CACHE_TTL_MS = 5 * 60 * 1000;
+const BRACKET_CACHE_MAX_ENTRIES = 100;
+const bracketRenderCache = new Map();
 
 function serializeParticipant(participant) {
   return {
@@ -44,6 +47,56 @@ function getBracketData(matches) {
   return rounds;
 }
 
+function getMatchStateFragment(match) {
+  return [
+    match.id,
+    match.round,
+    match.player1Id ?? match.player1?.id ?? 'p1',
+    match.player2Id ?? match.player2?.id ?? 'bye',
+    match.winnerId ?? match.winner?.id ?? 'pending',
+    match.updatedAt ? new Date(match.updatedAt).toISOString() : 'no-updated-at',
+  ].join(':');
+}
+
+function buildBracketCacheKey(tournament, matches, format) {
+  const tournamentUpdatedAt = tournament.updatedAt ? new Date(tournament.updatedAt).toISOString() : 'no-updated-at';
+  const matchState = matches.map(getMatchStateFragment).join('|');
+
+  return [
+    format,
+    tournament.id,
+    tournament.type ?? 'unknown',
+    tournamentUpdatedAt,
+    matchState,
+  ].join('::');
+}
+
+function getCachedRender(cacheKey) {
+  const cachedRender = bracketRenderCache.get(cacheKey);
+  if (!cachedRender) {
+    return null;
+  }
+
+  if (cachedRender.expiresAt <= Date.now()) {
+    bracketRenderCache.delete(cacheKey);
+    return null;
+  }
+
+  return cachedRender.value;
+}
+
+function setCachedRender(cacheKey, value) {
+  bracketRenderCache.set(cacheKey, {
+    value,
+    expiresAt: Date.now() + BRACKET_CACHE_TTL_MS,
+  });
+
+  while (bracketRenderCache.size > BRACKET_CACHE_MAX_ENTRIES) {
+    const oldestKey = bracketRenderCache.keys().next().value;
+    bracketRenderCache.delete(oldestKey);
+  }
+}
+
 async function generateBracketHtml(tournament, rounds) {
   const templatePath = path.join(__dirname, '..', '..', 'bracket.ejs');
   return ejs.renderFile(templatePath, { tournament, rounds });
@@ -70,16 +123,34 @@ async function getBracket(req, res) {
     if (format === 'json') {
       res.status(200).json(bracketData);
     } else if (format === 'html') {
-      const html = await generateBracketHtml(tournament, bracketData);
+      const cacheKey = buildBracketCacheKey(tournament, matches, 'html');
+      const html = getCachedRender(cacheKey) ?? await generateBracketHtml(tournament, bracketData);
+      if (!getCachedRender(cacheKey)) {
+        setCachedRender(cacheKey, html);
+      }
       res.status(200).send(html);
     } else if (format === 'image') {
-      const html = await generateBracketHtml(tournament, bracketData);
+      const htmlCacheKey = buildBracketCacheKey(tournament, matches, 'html');
+      const imageCacheKey = buildBracketCacheKey(tournament, matches, 'image');
+      const cachedImage = getCachedRender(imageCacheKey);
+      if (cachedImage) {
+        res.writeHead(200, { 'Content-Type': 'image/png' });
+        res.end(cachedImage, 'binary');
+        return;
+      }
+
+      const html = getCachedRender(htmlCacheKey) ?? await generateBracketHtml(tournament, bracketData);
+      if (!getCachedRender(htmlCacheKey)) {
+        setCachedRender(htmlCacheKey, html);
+      }
+
       const img = await utils.generateBracketImage(html);
 
       if (!img) {
         return res.status(500).json({ error: 'Unable to generate bracket image' });
       }
 
+      setCachedRender(imageCacheKey, img);
       res.writeHead(200, { 'Content-Type': 'image/png' });
       res.end(img, 'binary');
     } else {
@@ -92,5 +163,6 @@ async function getBracket(req, res) {
 }
 
 module.exports = {
+  bracketRenderCache,
   getBracket,
 };

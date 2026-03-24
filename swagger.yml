@@ -36,6 +36,20 @@ paths:
 
     get:
       summary: Get a list of all members
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number for paginated results. Defaults to 1.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size for paginated results. Defaults to 50.
       responses:
         '200':
           description: List of members
@@ -64,6 +78,19 @@ paths:
           schema:
             type: string
           description: Name to search for
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number for paginated results. Defaults to 1.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size for paginated results. Defaults to 50.
       responses:
         '200':
           description: List of matching members
@@ -101,6 +128,19 @@ paths:
               - swiss
               - league
           description: Filter tournaments by type
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number for paginated results. Defaults to 1.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size for paginated results. Defaults to 50.
       responses:
         '200':
           description: List of tournaments
@@ -342,6 +382,19 @@ paths:
           schema:
             type: integer
           required: true
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number for paginated results. Defaults to 1.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size for paginated results. Defaults to 50.
       responses:
         '200':
           description: List of participants
@@ -471,6 +524,19 @@ paths:
               - pending
               - completed
           description: Filter matches by status
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number for paginated results. Defaults to 1.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size for paginated results. Defaults to 50.
       responses:
         '200':
           description: List of matches

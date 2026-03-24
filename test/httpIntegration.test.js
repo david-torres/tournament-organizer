@@ -120,6 +120,36 @@ test('GET /tournaments lists tournaments and GET /tournaments/:id returns a sing
   assert.equal(detail.status, 'pending');
 });
 
+test('GET /members paginates large member lists and exposes pagination headers', async () => {
+  await Promise.all(
+    Array.from({ length: 55 }, (_, index) => createMember(`Paged Member ${Date.now()}-${index}`)),
+  );
+
+  const firstPageResponse = await inject(app, {
+    method: 'GET',
+    url: '/members',
+  });
+
+  assert.equal(firstPageResponse.statusCode, 200);
+  assert.equal(firstPageResponse.json().length, 50);
+  assert.equal(firstPageResponse.headers['x-page'], '1');
+  assert.equal(firstPageResponse.headers['x-limit'], '50');
+  assert.equal(firstPageResponse.headers['x-total-count'], '55');
+  assert.equal(firstPageResponse.headers['x-total-pages'], '2');
+
+  const secondPageResponse = await inject(app, {
+    method: 'GET',
+    url: '/members?page=2&limit=10',
+  });
+
+  assert.equal(secondPageResponse.statusCode, 200);
+  assert.equal(secondPageResponse.json().length, 10);
+  assert.equal(secondPageResponse.headers['x-page'], '2');
+  assert.equal(secondPageResponse.headers['x-limit'], '10');
+  assert.equal(secondPageResponse.headers['x-total-count'], '55');
+  assert.equal(secondPageResponse.headers['x-total-pages'], '6');
+});
+
 test('GET /tournaments/:id/standings exposes standings metadata for every tournament type', async () => {
   const tournamentFixtures = [
     { type: 'single_elimination', size: 2 },
@@ -151,6 +181,20 @@ test('GET /tournaments/:id/standings exposes standings metadata for every tourna
   }
 });
 
+test('list endpoints reject invalid pagination parameters with 400', async () => {
+  const memberResponse = await inject(app, {
+    method: 'GET',
+    url: '/members?page=0',
+  });
+  assert.equal(memberResponse.statusCode, 400);
+
+  const tournamentsResponse = await inject(app, {
+    method: 'GET',
+    url: '/tournaments?limit=abc',
+  });
+  assert.equal(tournamentsResponse.statusCode, 400);
+});
+
 test('PATCH /tournaments/:id updates pending tournament metadata', async () => {
   const tournament = await createTournament({
     name: `HTTP Patch Tournament ${Date.now()}`,
@@ -176,6 +220,47 @@ test('PATCH /tournaments/:id updates pending tournament metadata', async () => {
   const detail = await getTournament(tournament.id);
   assert.equal(detail.name, `${tournament.name} Updated`);
   assert.equal(detail.size, 8);
+});
+
+test('participants and matches endpoints paginate tournament-scoped lists', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Pagination Tournament ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all(
+    Array.from({ length: 12 }, (_, index) => createMember(`Paged Participant ${Date.now()}-${index}`)),
+  );
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants?page=2&limit=5`,
+  });
+
+  assert.equal(participantsResponse.statusCode, 200);
+  assert.equal(participantsResponse.json().length, 5);
+  assert.equal(participantsResponse.headers['x-page'], '2');
+  assert.equal(participantsResponse.headers['x-limit'], '5');
+  assert.equal(participantsResponse.headers['x-total-count'], '12');
+  assert.equal(participantsResponse.headers['x-total-pages'], '3');
+
+  const matchesResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/matches?page=2&limit=10`,
+  });
+
+  assert.equal(matchesResponse.statusCode, 200);
+  assert.equal(matchesResponse.json().length, 10);
+  assert.equal(matchesResponse.headers['x-page'], '2');
+  assert.equal(matchesResponse.headers['x-limit'], '10');
+  assert.equal(matchesResponse.headers['x-total-count'], '66');
+  assert.equal(matchesResponse.headers['x-total-pages'], '7');
 });
 
 test('PATCH /tournaments/:id archives tournaments, latest ignores archived tournaments, and archived tournaments reject new participants', async () => {

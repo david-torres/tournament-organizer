@@ -100,6 +100,8 @@ The API server will be running at `http://localhost:3000` (or the port specified
 
 Lifecycle notes:
 
+- Heavy list endpoints are paginated by default with `page` and `limit` query params. Current defaults are `page=1`, `limit=50`, with `limit` capped at `100`.
+- Paginated list responses keep the existing array body shape and expose metadata through the `X-Page`, `X-Limit`, `X-Total-Count`, and `X-Total-Pages` response headers.
 - `PATCH /tournaments/:id` supports `name`, `size` for pending single-elimination tournaments, and `status: "archived"` for non-active tournaments.
 - `GET /tournaments/latest` skips archived tournaments.
 - `GET /tournaments/:id/standings` works for every tournament type and exposes the tie-break order used for ranking.
@@ -109,6 +111,7 @@ Lifecycle notes:
 - League standings and winners are now decided by season results (`wins`, head-to-head group wins, then Sonneborn-Berger), not by manually ending the season based on current Elo.
 - `POST /tournaments/:id/matches` is no longer the normal league flow; once scheduled fixtures exist, ad hoc match creation is rejected.
 - Round robin winners are now persisted from computed standings using head-to-head group wins, and Swiss winners use standings tie-breaks (`wins`, `buchholz`, `sonneborn_berger`, direct head-to-head for two-way ties, then fewer byes).
+- Bracket HTML and image renders are cached in-process per tournament state, so repeated requests for unchanged brackets avoid rerendering.
 
 ## Bracket Visualization
 

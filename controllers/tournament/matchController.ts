@@ -4,6 +4,7 @@ const { Op, TimeoutError } = require('sequelize');
 const { loadSourceModule } = require('../../runtime/loadSourceModule');
 const { Tournament, Participant, Match, Member, sequelize } = loadSourceModule('models');
 const { updateElo } = require('../../utils');
+const { getPagination, setPaginationHeaders } = require('../../services/pagination');
 const {
   advanceSingleElimination,
   advanceRoundRobin,
@@ -207,6 +208,11 @@ async function getMatches(req, res) {
   const { status } = req.query;
 
   try {
+    const pagination = getPagination(req.query);
+    if (pagination.error) {
+      return res.status(400).json({ error: pagination.error });
+    }
+
     const tournament = await Tournament.findByPk(id);
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found' });
@@ -220,12 +226,15 @@ async function getMatches(req, res) {
       matchFilter.winnerId = null;
     }
 
-    const matches = await Match.findAll({
+    const { rows: matches, count } = await Match.findAndCountAll({
       where: matchFilter,
       include: MATCH_INCLUDES,
       order: [['id', 'ASC']],
+      limit: pagination.limit,
+      offset: pagination.offset,
     });
 
+    setPaginationHeaders(res, count, pagination.page, pagination.limit);
     res.json(matches);
   } catch (error) {
     console.error(error);
