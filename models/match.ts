@@ -1,3 +1,5 @@
+export {};
+
 module.exports = (sequelize, DataTypes) => {
   const Match = sequelize.define('Match', {
     id: {

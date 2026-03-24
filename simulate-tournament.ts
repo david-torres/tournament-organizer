@@ -1,3 +1,5 @@
+export {};
+
 const { faker } = require('@faker-js/faker');
 const client = require('./client');
 const { createMemberIfNotExists, displayMatchResults } = require('./utils/simulation');
@@ -103,7 +105,7 @@ async function simulateLadderTournament(tournamentId, matchCount = DEFAULT_LADDE
   }
 }
 
-async function simulateTournament(type, options = {}) {
+async function simulateTournament(type, options: any = {}) {
   const playerCount = options.playerCount || getDefaultPlayerCount(type);
 
   try {

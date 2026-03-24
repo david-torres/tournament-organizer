@@ -1,3 +1,5 @@
+export {};
+
 module.exports = (sequelize, DataTypes) => {
   const Tournament = sequelize.define('Tournament', {
     id: {

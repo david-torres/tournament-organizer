@@ -1,3 +1,5 @@
+export {};
+
 const { Sequelize } = require('sequelize');
 const MemberModel = require('./member');
 const TournamentModel = require('./tournament');
@@ -33,7 +35,7 @@ async function authenticateDatabase() {
   await sequelize.authenticate();
 }
 
-function shouldRepairStaleSchema(error, options = {}) {
+function shouldRepairStaleSchema(error, options: any = {}) {
   if (options.force || options.alter) {
     return false;
   }
@@ -56,7 +58,7 @@ function shouldRepairStaleSchema(error, options = {}) {
   return code === '42703' || /column\s+"?.+"?\s+does not exist/i.test(message);
 }
 
-async function syncDatabase(options = {}) {
+async function syncDatabase(options: any = {}) {
   try {
     await sequelize.sync(options);
   } catch (error) {

@@ -23,8 +23,8 @@ A REST API for creating and managing tournaments, participants, and matches, wit
 
 ### Prerequisites
 
-- Node.js (v14 or newer)
-- npm (v6 or newer)
+- Node.js
+- npm
 
 ### Installation
 
@@ -72,7 +72,8 @@ A REST API for creating and managing tournaments, participants, and matches, wit
 
     Or:
 
-    node server.js
+    npm run build
+    node dist/server.js
 
 The API server will be running at `http://localhost:3000` (or the port specified in your `PORT` environment variable).
 
@@ -146,7 +147,7 @@ For double-elimination tournaments, bracket JSON is segmented into `winners`, `l
 
 ## Running the Simulation Script
 
-You can run the `simulate-tournament.js` script to simulate the entire flow of adding members, creating a tournament, participants joining, generating matches, and randomly assigning winners until the tournament is complete. Helpers have been added to package.json and can be run using npm:
+You can run the `simulate-tournament.ts` source script via the compiled `dist/simulate-tournament.js` entrypoint to simulate the entire flow of adding members, creating a tournament, participants joining, generating matches, and randomly assigning winners until the tournament is complete. Helpers have been added to package.json and can be run using npm:
 
 Single Elimination:
 

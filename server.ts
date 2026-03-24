@@ -1,3 +1,5 @@
+export {};
+
 const config = require('./config/config');
 const { createApp } = require('./app');
 const { authenticateDatabase, syncDatabase } = require('./models');

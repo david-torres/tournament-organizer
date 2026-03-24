@@ -1,7 +1,6 @@
 export {};
 
-const { loadSourceModule } = require('../runtime/loadSourceModule');
-const { Match } = loadSourceModule('models');
+const { Match } = require('../models');
 const {
   buildDoubleEliminationPlan,
   generateSwissMatches,

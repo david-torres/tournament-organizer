@@ -1,3 +1,5 @@
+export {};
+
 const SIMULATED_TOURNAMENT_TYPES = Object.freeze([
   'single_elimination',
   'double_elimination',

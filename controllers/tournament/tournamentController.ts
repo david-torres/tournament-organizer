@@ -1,8 +1,7 @@
 export {};
 
 const { Op, TimeoutError, UniqueConstraintError } = require('sequelize');
-const { loadSourceModule } = require('../../runtime/loadSourceModule');
-const { Tournament, Participant, Match, Member, sequelize } = loadSourceModule('models');
+const { Tournament, Participant, Match, Member, sequelize } = require('../../models');
 const { isPowerOfTwo, decayElo: applyDecay } = require('../../utils');
 const { getStandingsForTournament } = require('../../services/standings');
 const { getPagination, setPaginationHeaders } = require('../../services/pagination');

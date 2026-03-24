@@ -1,3 +1,5 @@
+export {};
+
 const { authenticateDatabase, syncDatabase } = require('./models');
 
 const initializeDatabase = async () => {

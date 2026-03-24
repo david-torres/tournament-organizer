@@ -1,3 +1,5 @@
+export {};
+
 async function createMemberIfNotExists(client, name) {
   try {
     const existingMember = await client.searchMembers(name);
@@ -34,4 +36,3 @@ module.exports = {
   createMemberIfNotExists,
   displayMatchResults,
 };
-

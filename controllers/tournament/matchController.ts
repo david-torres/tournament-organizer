@@ -1,8 +1,7 @@
 export {};
 
 const { Op, TimeoutError } = require('sequelize');
-const { loadSourceModule } = require('../../runtime/loadSourceModule');
-const { Tournament, Participant, Match, Member, sequelize } = loadSourceModule('models');
+const { Tournament, Participant, Match, Member, sequelize } = require('../../models');
 const { updateElo } = require('../../utils');
 const { getPagination, setPaginationHeaders } = require('../../services/pagination');
 const { isMatchCompleted } = require('../../services/matchState');

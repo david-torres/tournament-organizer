@@ -1,3 +1,5 @@
+export {};
+
 const memberController = require('./controllers/memberController');
 const tournamentController = require('./controllers/tournament');
 

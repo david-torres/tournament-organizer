@@ -1,3 +1,5 @@
+export {};
+
 const TOURNAMENT_API_URL = process.env.TOURNAMENT_API_URL || 'http://localhost:3000';
 
 function buildQueryString(params = {}) {
@@ -65,14 +67,14 @@ async function getErrorMessage(response) {
   return 'An error occurred';
 }
 
-async function apiCall(endpoint, options = {}) {
+async function apiCall(endpoint, options: any = {}) {
   const {
     method = 'GET',
     body,
     query,
     responseType = 'auto',
   } = options;
-  const requestOptions = {
+  const requestOptions: any = {
     method,
     headers: {},
   };
@@ -85,7 +87,7 @@ async function apiCall(endpoint, options = {}) {
   const response = await fetch(`${TOURNAMENT_API_URL}${endpoint}${buildQueryString(query)}`, requestOptions);
 
   if (!response.ok) {
-    const error = new Error(await getErrorMessage(response));
+    const error: any = new Error(await getErrorMessage(response));
     error.status = response.status;
     throw error;
   }

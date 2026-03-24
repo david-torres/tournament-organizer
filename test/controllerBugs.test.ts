@@ -1,3 +1,5 @@
+export {};
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const ejs = require('ejs');
@@ -9,7 +11,7 @@ const bracketController = require('../controllers/tournament/bracketController')
 const models = require('../models');
 const utils = require('../utils');
 
-function createRes() {
+function createRes(): any {
   return {
     statusCode: null,
     body: null,

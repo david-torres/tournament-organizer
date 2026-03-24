@@ -1,3 +1,5 @@
+export {};
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -52,7 +54,7 @@ async function seedSingleEliminationTournament() {
   return { tournament, winnerParticipant };
 }
 
-async function createParticipant(tournament, name, options = {}) {
+async function createParticipant(tournament, name, options: any = {}) {
   const member = await models.Member.create({
     name: `${name} ${Date.now()}`,
     elo: options.memberElo ?? 1200,
@@ -65,7 +67,7 @@ async function createParticipant(tournament, name, options = {}) {
   });
 }
 
-function createRes() {
+function createRes(): any {
   return {
     statusCode: null,
     body: null,

@@ -1,3 +1,5 @@
+export {};
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -67,7 +69,6 @@ function resetModule(modulePath) {
 
 function resetRuntimeModules() {
   resetModule('../config/config');
-  resetModule('../dist/config/config.js');
   resetModule('../models');
 }
 

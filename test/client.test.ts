@@ -1,7 +1,9 @@
+export {};
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const ORIGINAL_FETCH = global.fetch;
+const ORIGINAL_FETCH = (global as any).fetch;
 const ORIGINAL_API_URL = process.env.TOURNAMENT_API_URL;
 
 function createHeaders(headers = {}) {
@@ -46,7 +48,7 @@ function loadClient() {
 }
 
 test.afterEach(() => {
-  global.fetch = ORIGINAL_FETCH;
+  (global as any).fetch = ORIGINAL_FETCH;
 
   if (ORIGINAL_API_URL === undefined) {
     delete process.env.TOURNAMENT_API_URL;
@@ -59,7 +61,7 @@ test('searchMembers encodes the query string and forwards extra params', async (
   process.env.TOURNAMENT_API_URL = 'https://api.example.test';
 
   let receivedUrl = null;
-  global.fetch = async (url) => {
+  (global as any).fetch = async (url) => {
     receivedUrl = url;
     return createResponse({ jsonBody: { rows: [] } });
   };
@@ -78,7 +80,7 @@ test('getMatches does not append an empty query string', async () => {
   process.env.TOURNAMENT_API_URL = 'https://api.example.test';
 
   let receivedUrl = null;
-  global.fetch = async (url) => {
+  (global as any).fetch = async (url) => {
     receivedUrl = url;
     return createResponse({ jsonBody: [] });
   };
@@ -94,7 +96,7 @@ test('updateMatch accepts the richer match update payload shape', async () => {
   process.env.TOURNAMENT_API_URL = 'https://api.example.test';
 
   let receivedOptions = null;
-  global.fetch = async (_url, options) => {
+  (global as any).fetch = async (_url, options) => {
     receivedOptions = options;
     return createResponse({ jsonBody: { id: 7 } });
   };
@@ -137,7 +139,7 @@ test('getBracket returns html text and image buffers for non-json formats', asyn
   ];
   const receivedUrls = [];
 
-  global.fetch = async (url) => {
+  (global as any).fetch = async (url) => {
     receivedUrls.push(url);
     return responses.shift();
   };
@@ -159,7 +161,7 @@ test('current route wrappers call the expected endpoints', async () => {
   process.env.TOURNAMENT_API_URL = 'https://api.example.test';
 
   const calls = [];
-  global.fetch = async (url, options = {}) => {
+  (global as any).fetch = async (url, options: any = {}) => {
     calls.push({
       url,
       method: options.method ?? 'GET',

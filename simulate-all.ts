@@ -1,3 +1,5 @@
+export {};
+
 const { spawnSync } = require('node:child_process');
 const { SIMULATED_TOURNAMENT_TYPES } = require('./utils/simulationConfig');
 

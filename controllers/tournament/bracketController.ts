@@ -2,9 +2,8 @@ export {};
 
 const ejs = require('ejs');
 const path = require('path');
-const { loadSourceModule } = require('../../runtime/loadSourceModule');
-const { Tournament, Participant, Match, Member } = loadSourceModule('models');
-const utils = loadSourceModule('utils');
+const { Tournament, Participant, Match, Member } = require('../../models');
+const utils = require('../../utils');
 
 const MATCH_INCLUDES = [
   { model: Participant, as: 'player1', include: { model: Member, as: 'member' } },

@@ -1,7 +1,6 @@
 export {};
 
-const { loadSourceModule } = require('../runtime/loadSourceModule');
-const { Member } = loadSourceModule('models');
+const { Member } = require('../models');
 const { getPagination, setPaginationHeaders } = require('../services/pagination');
 
 const INITIAL_ELO = 1200;
