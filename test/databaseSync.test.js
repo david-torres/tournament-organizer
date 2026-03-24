@@ -65,7 +65,76 @@ function resetModule(modulePath) {
   delete require.cache[require.resolve(modulePath)];
 }
 
-test('syncDatabase repairs a stale development sqlite schema by retrying with alter', async () => {
+function resetRuntimeModules() {
+  resetModule('../config/config');
+  resetModule('../dist/config/config.js');
+  resetModule('../models');
+}
+
+test('shouldRepairStaleSchema retries column-missing postgres errors only when sync is not already altering', { concurrency: false }, async () => {
+  const originalEnv = {
+    NODE_ENV: process.env.NODE_ENV,
+    DB_DIALECT: process.env.DB_DIALECT,
+    DB_STORAGE: process.env.DB_STORAGE,
+    DB_NAME: process.env.DB_NAME,
+    DB_HOST: process.env.DB_HOST,
+    DB_PORT: process.env.DB_PORT,
+    DB_USERNAME: process.env.DB_USERNAME,
+    DB_PASSWORD: process.env.DB_PASSWORD,
+    DB_LOGGING: process.env.DB_LOGGING,
+  };
+
+  process.env.NODE_ENV = 'production';
+  process.env.DB_DIALECT = 'postgres';
+  process.env.DB_NAME = 'legacy';
+  process.env.DB_HOST = '127.0.0.1';
+  process.env.DB_PORT = '5432';
+  process.env.DB_USERNAME = 'postgres';
+  process.env.DB_PASSWORD = 'postgres';
+  process.env.DB_STORAGE = '';
+  process.env.DB_LOGGING = 'false';
+
+  resetRuntimeModules();
+
+  const models = require('../models');
+
+  try {
+    assert.equal(models.shouldRepairStaleSchema({
+      original: {
+        code: '42703',
+        message: 'column "seed" does not exist',
+      },
+    }), true);
+
+    assert.equal(models.shouldRepairStaleSchema({
+      original: {
+        code: '23505',
+        message: 'duplicate key value violates unique constraint',
+      },
+    }), false);
+
+    assert.equal(models.shouldRepairStaleSchema({
+      original: {
+        code: '42703',
+        message: 'column "seed" does not exist',
+      },
+    }, { alter: true }), false);
+  } finally {
+    await models.sequelize.close().catch(() => {});
+
+    Object.entries(originalEnv).forEach(([key, value]) => {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+
+    resetRuntimeModules();
+  }
+});
+
+test('syncDatabase repairs a stale development sqlite schema by retrying with alter', { concurrency: false }, async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tournament-organizer-sync-'));
   const storagePath = path.join(tempDir, 'legacy.db');
   const originalEnv = {
@@ -92,8 +161,7 @@ test('syncDatabase repairs a stale development sqlite schema by retrying with al
   process.env.DB_PASSWORD = '';
   process.env.DB_LOGGING = 'false';
 
-  resetModule('../config/config');
-  resetModule('../models');
+  resetRuntimeModules();
 
   const models = require('../models');
 
@@ -124,8 +192,7 @@ test('syncDatabase repairs a stale development sqlite schema by retrying with al
       }
     });
 
-    resetModule('../config/config');
-    resetModule('../models');
+    resetRuntimeModules();
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });

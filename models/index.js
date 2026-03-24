@@ -33,28 +33,38 @@ async function authenticateDatabase() {
   await sequelize.authenticate();
 }
 
-function shouldRepairStaleSqliteSchema(error, options = {}) {
-  if (runtimeConfig.dialect !== 'sqlite' || config.env !== 'development') {
-    return false;
-  }
-
+function shouldRepairStaleSchema(error, options = {}) {
   if (options.force || options.alter) {
     return false;
   }
 
+  if (runtimeConfig.dialect === 'sqlite' && config.env !== 'development') {
+    return false;
+  }
+
+  if (runtimeConfig.dialect !== 'sqlite' && runtimeConfig.dialect !== 'postgres') {
+    return false;
+  }
+
   const message = error?.original?.message || error?.message || '';
-  return /SQLITE_ERROR:\s*no such column:/i.test(message);
+  const code = error?.original?.code || error?.parent?.code || error?.code || '';
+
+  if (runtimeConfig.dialect === 'sqlite') {
+    return /SQLITE_ERROR:\s*no such column:/i.test(message);
+  }
+
+  return code === '42703' || /column\s+"?.+"?\s+does not exist/i.test(message);
 }
 
 async function syncDatabase(options = {}) {
   try {
     await sequelize.sync(options);
   } catch (error) {
-    if (!shouldRepairStaleSqliteSchema(error, options)) {
+    if (!shouldRepairStaleSchema(error, options)) {
       throw error;
     }
 
-    console.warn('Detected stale SQLite development schema. Retrying sync with alter to repair missing columns.');
+    console.warn(`Detected stale ${runtimeConfig.dialect} schema. Retrying sync with alter to repair missing columns.`);
     await sequelize.sync({
       ...options,
       alter: {
@@ -67,6 +77,6 @@ async function syncDatabase(options = {}) {
 module.exports = {
   ...db,
   authenticateDatabase,
-  shouldRepairStaleSqliteSchema,
+  shouldRepairStaleSchema,
   syncDatabase,
 };
