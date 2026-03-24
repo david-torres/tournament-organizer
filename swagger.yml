@@ -353,6 +353,10 @@ paths:
               properties:
                 member_id:
                   type: integer
+                seed:
+                  type: integer
+                  nullable: true
+                  description: Optional organizer-controlled seed for setup ordering
       responses:
         '201':
           description: New participant added
@@ -367,6 +371,9 @@ paths:
                     type: integer
                   tournamentId:
                     type: integer
+                  seed:
+                    type: integer
+                    nullable: true
         '404':
           description: Tournament or member not found
         '409':
@@ -411,6 +418,58 @@ paths:
                       type: integer
                     tournamentId:
                       type: integer
+                    seed:
+                      type: integer
+                      nullable: true
+
+  /tournaments/{id}/participants/{participant_id}:
+    patch:
+      summary: Update pending participant setup fields
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+        - in: path
+          name: participant_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                seed:
+                  type: integer
+                  nullable: true
+                  description: Organizer-controlled seed. Use null to clear it.
+      responses:
+        '200':
+          description: Participant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  memberId:
+                    type: integer
+                  tournamentId:
+                    type: integer
+                  seed:
+                    type: integer
+                    nullable: true
+        '400':
+          description: Invalid participant update payload
+        '404':
+          description: Tournament or participant not found
+        '409':
+          description: Tournament is no longer pending or seed conflicts with another participant
 
   /tournaments/{id}/standings:
     get:

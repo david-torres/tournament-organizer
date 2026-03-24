@@ -29,14 +29,25 @@ async function createTournament(payload) {
   return response.json();
 }
 
-async function addParticipant(tournamentId, memberId) {
+async function addParticipant(tournamentId, memberId, options = {}) {
   const response = await inject(app, {
     method: 'POST',
     url: `/tournaments/${tournamentId}/participants`,
-    payload: { member_id: memberId },
+    payload: { member_id: memberId, ...options },
   });
 
   assert.equal(response.statusCode, 201);
+}
+
+async function updateParticipant(tournamentId, participantId, payload) {
+  const response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournamentId}/participants/${participantId}`,
+    payload,
+  });
+
+  assert.equal(response.statusCode, 200);
+  return response.json();
 }
 
 async function startTournament(tournamentId) {
@@ -222,6 +233,80 @@ test('PATCH /tournaments/:id updates pending tournament metadata', async () => {
   assert.equal(detail.size, 8);
 });
 
+test('pending tournament participants can be manually seeded before start', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Participant Seeding ${Date.now()}`,
+    type: 'single_elimination',
+    size: 4,
+  });
+
+  const members = await Promise.all([
+    createMember(`Seed One ${Date.now()}`),
+    createMember(`Seed Two ${Date.now()}`),
+    createMember(`Seed Three ${Date.now()}`),
+    createMember(`Seed Four ${Date.now()}`),
+  ]);
+
+  await addParticipant(tournament.id, members[0].id, { seed: 4 });
+  await addParticipant(tournament.id, members[1].id, { seed: 1 });
+  await addParticipant(tournament.id, members[2].id);
+  await addParticipant(tournament.id, members[3].id);
+
+  const participantsBeforeUpdate = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsBeforeUpdate.statusCode, 200);
+
+  const unseededParticipant = participantsBeforeUpdate.json().find((participant) => participant.seed == null);
+  const updatedParticipant = await updateParticipant(tournament.id, unseededParticipant.id, { seed: 2 });
+  assert.equal(updatedParticipant.seed, 2);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsResponse.statusCode, 200);
+
+  const participants = participantsResponse.json();
+  assert.deepStrictEqual(
+    participants.map((participant) => participant.seed),
+    [1, 2, 4, null],
+  );
+});
+
+test('participant seeding rejects duplicate seeds within the same tournament', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Duplicate Seed ${Date.now()}`,
+    type: 'single_elimination',
+    size: 4,
+  });
+
+  const members = await Promise.all([
+    createMember(`Dup Seed One ${Date.now()}`),
+    createMember(`Dup Seed Two ${Date.now()}`),
+  ]);
+
+  await addParticipant(tournament.id, members[0].id, { seed: 1 });
+  await addParticipant(tournament.id, members[1].id);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsResponse.statusCode, 200);
+
+  const secondParticipant = participantsResponse.json().find((participant) => participant.seed == null);
+  const updateResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/participants/${secondParticipant.id}`,
+    payload: { seed: 1 },
+  });
+
+  assert.equal(updateResponse.statusCode, 409);
+  assert.match(updateResponse.json().error, /seed/i);
+});
+
 test('participants and matches endpoints paginate tournament-scoped lists', async () => {
   const tournament = await createTournament({
     name: `HTTP Pagination Tournament ${Date.now()}`,
@@ -340,6 +425,38 @@ test('PATCH /tournaments/:id/matches/:match_id accepts participant ids and compl
   const refreshedTournament = await models.Tournament.findByPk(tournament.id);
   assert.equal(refreshedTournament.status, 'completed');
   assert.equal(refreshedTournament.winnerId, winnerParticipantId);
+});
+
+test('single-elimination start uses manual seed placement instead of randomized setup', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Manual Seeding ${Date.now()}`,
+    type: 'single_elimination',
+    size: 4,
+  });
+
+  const members = await Promise.all([
+    createMember(`Bracket Seed 4 ${Date.now()}`),
+    createMember(`Bracket Seed 1 ${Date.now()}`),
+    createMember(`Bracket Seed 3 ${Date.now()}`),
+    createMember(`Bracket Seed 2 ${Date.now()}`),
+  ]);
+
+  await addParticipant(tournament.id, members[0].id, { seed: 4 });
+  await addParticipant(tournament.id, members[1].id, { seed: 1 });
+  await addParticipant(tournament.id, members[2].id, { seed: 3 });
+  await addParticipant(tournament.id, members[3].id, { seed: 2 });
+
+  await startTournament(tournament.id);
+
+  const matches = await getMatches(tournament.id, { status: 'pending' });
+  assert.equal(matches.length, 2);
+  assert.deepStrictEqual(
+    matches.map((match) => [match.player1.member.name, match.player2.member.name]),
+    [
+      [members[1].name, members[0].name],
+      [members[3].name, members[2].name],
+    ],
+  );
 });
 
 test('POST /tournaments/:id/reset clears completed tournament matches and winner state', async () => {

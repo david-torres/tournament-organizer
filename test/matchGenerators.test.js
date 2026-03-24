@@ -2,9 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  assignEffectiveSeeds,
   generateLeagueMatches,
   generateRoundRobinMatches,
   generateSwissMatches,
+  generateSingleEliminationMatches,
 } = require('../services/matchGenerators');
 
 function makeParticipants(count) {
@@ -34,6 +36,39 @@ test('generateLeagueMatches produces the same scheduled season as round robin pa
 
   assert.equal(leagueMatches.length, 6);
   assert.equal(new Set(leagueMatches.map(normalizePair)).size, 6);
+});
+
+test('generateSingleEliminationMatches honors manual seeds with standard bracket placement', () => {
+  const matches = generateSingleEliminationMatches([
+    { id: 101, seed: 4 },
+    { id: 102, seed: 1 },
+    { id: 103, seed: 3 },
+    { id: 104, seed: 2 },
+  ]);
+
+  assert.deepStrictEqual(matches, [
+    { round: 1, player1Id: 102, player2Id: 101 },
+    { round: 1, player1Id: 104, player2Id: 103 },
+  ]);
+});
+
+test('assignEffectiveSeeds fills unseeded participants after explicit seeds', () => {
+  const seededParticipants = assignEffectiveSeeds([
+    { id: 1, seed: 3 },
+    { id: 2, seed: null },
+    { id: 3, seed: 1 },
+    { id: 4, seed: null },
+  ]);
+
+  assert.deepStrictEqual(
+    seededParticipants.map((participant) => ({ id: participant.id, effectiveSeed: participant.effectiveSeed })),
+    [
+      { id: 3, effectiveSeed: 1 },
+      { id: 1, effectiveSeed: 3 },
+      { id: 2, effectiveSeed: 2 },
+      { id: 4, effectiveSeed: 4 },
+    ],
+  );
 });
 
 test('generateSwissMatches assigns one bye and avoids rematches in later rounds', () => {

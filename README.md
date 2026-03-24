@@ -10,7 +10,7 @@ A REST API for creating and managing tournaments, participants, and matches, wit
 
 ## Features
 
-- Generate randomized matches, supporting byes for the highest ranked players
+- Generate seeded or organizer-controlled matches, supporting byes for the highest ranked players
 - Track member Elo scores across matches and tournaments
 - Leagues for regularly starting with a fresh Elo score and configurable Elo decay after a period of non-participation
 - Generate a bracket graphic for visualizing the tournament
@@ -87,6 +87,7 @@ The API server will be running at `http://localhost:3000` (or the port specified
 | POST   | /tournaments/:id/reset                 | Reset a non-active tournament back to pending      |
 | DELETE | /tournaments/:id                       | Delete a non-active tournament                     |
 | GET    | /tournaments/:id/participants          | Get a list of tournament participants              |
+| PATCH  | /tournaments/:id/participants/:participant_id | Update pending participant setup fields such as `seed` |
 | GET    | /tournaments/:id/standings             | Get computed standings and tie-break metadata      |
 | POST   | /tournaments/:id/participants          | Add a member to a pending tournament               |
 | POST   | /tournaments/:id/start                 | Start a tournament and generate its initial matches or season fixtures |
@@ -103,6 +104,8 @@ Lifecycle notes:
 - Heavy list endpoints are paginated by default with `page` and `limit` query params. Current defaults are `page=1`, `limit=50`, with `limit` capped at `100`.
 - Paginated list responses keep the existing array body shape and expose metadata through the `X-Page`, `X-Limit`, `X-Total-Count`, and `X-Total-Pages` response headers.
 - `PATCH /tournaments/:id` supports `name`, `size` for pending single-elimination tournaments, and `status: "archived"` for non-active tournaments.
+- `POST /tournaments/:id/participants` accepts an optional `seed`, and `PATCH /tournaments/:id/participants/:participant_id` lets organizers adjust seeds while the tournament is still pending.
+- Single-elimination `start` now uses bracket seeding placement instead of randomizing entrants, and round-robin/league setup respects the explicit seed order when generating fixtures.
 - `GET /tournaments/latest` skips archived tournaments.
 - `GET /tournaments/:id/standings` works for every tournament type and exposes the tie-break order used for ranking.
 - `POST /tournaments/:id/reset` deletes existing matches, clears the winner, and returns the tournament to `pending`.

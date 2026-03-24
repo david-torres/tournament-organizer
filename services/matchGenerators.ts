@@ -12,11 +12,84 @@ function normalizeParticipants(participants) {
   return participants.map(normalizeParticipant);
 }
 
-function shuffleParticipants(participants) {
-  for (let i = participants.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [participants[i], participants[j]] = [participants[j], participants[i]];
+function compareParticipantsBySetupOrder(leftParticipant, rightParticipant) {
+  const leftSeed = leftParticipant.seed;
+  const rightSeed = rightParticipant.seed;
+
+  if (leftSeed != null && rightSeed != null && leftSeed !== rightSeed) {
+    return leftSeed - rightSeed;
   }
+
+  if (leftSeed != null && rightSeed == null) {
+    return -1;
+  }
+
+  if (leftSeed == null && rightSeed != null) {
+    return 1;
+  }
+
+  return leftParticipant.id - rightParticipant.id;
+}
+
+function compareParticipantsBySeedPreference(leftParticipant, rightParticipant) {
+  const leftSeed = leftParticipant.seed;
+  const rightSeed = rightParticipant.seed;
+
+  if (leftSeed != null && rightSeed != null && leftSeed !== rightSeed) {
+    return leftSeed - rightSeed;
+  }
+
+  if (leftSeed != null && rightSeed == null) {
+    return -1;
+  }
+
+  if (leftSeed == null && rightSeed != null) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function sortParticipantsForSetup(participants) {
+  return [...normalizeParticipants(participants)].sort(compareParticipantsBySetupOrder);
+}
+
+function assignEffectiveSeeds(participants) {
+  const orderedParticipants = sortParticipantsForSetup(participants);
+  const usedSeeds = new Set(orderedParticipants.filter((participant) => participant.seed != null).map((participant) => participant.seed));
+  let nextAvailableSeed = 1;
+
+  return orderedParticipants.map((participant) => {
+    if (participant.seed != null) {
+      return {
+        ...participant,
+        effectiveSeed: participant.seed,
+      };
+    }
+
+    while (usedSeeds.has(nextAvailableSeed)) {
+      nextAvailableSeed += 1;
+    }
+
+    const effectiveSeed = nextAvailableSeed;
+    usedSeeds.add(effectiveSeed);
+    nextAvailableSeed += 1;
+
+    return {
+      ...participant,
+      effectiveSeed,
+    };
+  });
+}
+
+function buildSingleEliminationSeedPositions(size) {
+  let positions = [1, 2];
+
+  for (let bracketSize = 4; bracketSize <= size; bracketSize *= 2) {
+    positions = positions.flatMap((seed) => [seed, bracketSize + 1 - seed]);
+  }
+
+  return positions;
 }
 
 function getPairKey(player1Id, player2Id) {
@@ -40,7 +113,12 @@ function sortSwissParticipants(participants, existingMatches) {
       return b.wins - a.wins;
     }
 
-    return b.elo - a.elo;
+    const seedPreferenceComparison = compareParticipantsBySeedPreference(a, b);
+    if (seedPreferenceComparison !== 0) {
+      return seedPreferenceComparison;
+    }
+
+    return b.elo - a.elo || a.id - b.id;
   });
 }
 
@@ -143,14 +221,13 @@ function buildSwissBlockedPairs(participants, existingMatches, currentRound) {
 
 function generateSingleEliminationMatches(participants) {
   const matches = [];
-  let matchIndex = 0;
+  const seededParticipants = assignEffectiveSeeds(participants);
+  const bracketPositions = buildSingleEliminationSeedPositions(seededParticipants.length);
+  const participantsBySeed = new Map(seededParticipants.map((participant) => [participant.effectiveSeed, participant]));
 
-  const randomizedParticipants = normalizeParticipants(participants);
-  shuffleParticipants(randomizedParticipants);
-
-  for (let position = 1; position <= randomizedParticipants.length / 2; position++) {
-    const player1 = randomizedParticipants[matchIndex++];
-    const player2 = randomizedParticipants[matchIndex++];
+  for (let position = 0; position < bracketPositions.length; position += 2) {
+    const player1 = participantsBySeed.get(bracketPositions[position]);
+    const player2 = participantsBySeed.get(bracketPositions[position + 1]);
 
     matches.push({
       round: 1,
@@ -164,7 +241,7 @@ function generateSingleEliminationMatches(participants) {
 
 function generateRoundRobinMatches(participants) {
   const matches = [];
-  const workingParticipants = normalizeParticipants(participants);
+  const workingParticipants = sortParticipantsForSetup(participants);
 
   if (workingParticipants.length % 2 !== 0) {
     workingParticipants.push({ id: null });
@@ -207,8 +284,10 @@ function generateSwissMatches(participants, existingMatches = []) {
 }
 
 module.exports = {
+  assignEffectiveSeeds,
   generateSingleEliminationMatches,
   generateRoundRobinMatches,
   generateLeagueMatches,
   generateSwissMatches,
+  sortParticipantsForSetup,
 };

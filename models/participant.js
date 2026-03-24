@@ -26,12 +26,20 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 1200,
     },
+    seed: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   }, {
     freezeTableName: true,
     indexes: [
       {
         unique: true,
         fields: ['memberId', 'tournamentId']
+      },
+      {
+        unique: true,
+        fields: ['tournamentId', 'seed']
       }
     ]
   });

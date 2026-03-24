@@ -11,6 +11,7 @@ const {
   generateRoundRobinMatches,
   generateLeagueMatches,
   generateSwissMatches,
+  sortParticipantsForSetup,
 } = require('../../services/matchGenerators');
 
 const MATCH_GENERATORS = {
@@ -24,6 +25,7 @@ const ARCHIVED_TOURNAMENT_STATUS = 'archived';
 const PENDING_TOURNAMENT_STATUS = 'pending';
 const IN_PROGRESS_TOURNAMENT_STATUS = 'in_progress';
 const ALLOWED_TOURNAMENT_UPDATE_FIELDS = ['name', 'size', 'status'];
+const ALLOWED_PARTICIPANT_UPDATE_FIELDS = ['seed'];
 
 function isSqliteBusyError(error) {
   return error?.parent?.code === 'SQLITE_BUSY' || error?.original?.code === 'SQLITE_BUSY' || error?.message?.includes('SQLITE_BUSY');
@@ -35,6 +37,14 @@ function getLeagueWinnerParticipantId(winnerParticipant) {
 
 function hasReachedParticipantLimit(tournament, participantCount) {
   return tournament.type === 'single_elimination' && participantCount === tournament.size;
+}
+
+function getParticipantListOrder() {
+  return [
+    [sequelize.literal('"Participant"."seed" IS NULL'), 'ASC'],
+    ['seed', 'ASC'],
+    ['id', 'ASC'],
+  ];
 }
 
 function getTournamentMatchesPayload(tournament, matches) {
@@ -67,6 +77,40 @@ function getUnsupportedUpdateFields(payload) {
 
 function canArchiveTournament(tournament) {
   return tournament.status !== IN_PROGRESS_TOURNAMENT_STATUS;
+}
+
+function parseSeedValue(rawSeed) {
+  if (rawSeed === undefined) {
+    return { provided: false, value: undefined };
+  }
+
+  if (rawSeed === null) {
+    return { provided: true, value: null };
+  }
+
+  const parsedSeed = Number.parseInt(String(rawSeed), 10);
+  if (!Number.isInteger(parsedSeed) || parsedSeed <= 0) {
+    return { provided: true, error: 'Participant seed must be a positive integer or null' };
+  }
+
+  return { provided: true, value: parsedSeed };
+}
+
+async function findSeedConflict(tournamentId, seed, options: any = {}) {
+  if (seed == null) {
+    return null;
+  }
+
+  const where: any = {
+    tournamentId,
+    seed,
+  };
+
+  if (options.excludeParticipantId != null) {
+    where.id = { [Op.ne]: options.excludeParticipantId };
+  }
+
+  return Participant.findOne({ where, transaction: options.transaction });
 }
 
 async function getTournaments(req, res) {
@@ -129,9 +173,14 @@ async function addParticipant(req, res) {
   try {
     const memberId = req.body.member_id;
     const tournamentId = req.params.id;
+    const parsedSeed = parseSeedValue(req.body.seed);
 
     if (!memberId || !tournamentId) {
       return res.status(400).json({ error: 'IDs not set' });
+    }
+
+    if (parsedSeed.error) {
+      return res.status(400).json({ error: parsedSeed.error });
     }
 
     const tournament = await Tournament.findByPk(tournamentId);
@@ -153,12 +202,27 @@ async function addParticipant(req, res) {
       }
     }
 
-    await Participant.create({ memberId, tournamentId });
+    if (parsedSeed.provided && tournament.type === 'single_elimination' && parsedSeed.value > tournament.size) {
+      return res.status(400).json({ error: 'Participant seed cannot exceed the tournament size' });
+    }
+
+    if (parsedSeed.provided) {
+      const seedConflict = await findSeedConflict(tournament.id, parsedSeed.value);
+      if (seedConflict) {
+        return res.status(409).json({ error: 'Participant seed is already assigned in this tournament' });
+      }
+    }
+
+    await Participant.create({ memberId, tournamentId, seed: parsedSeed.value });
 
     res.status(201).json({ message: 'Participant added to the tournament' });
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
-      res.status(409).json({ error: 'Member is already a participant in this tournament' });
+      if (error.fields?.seed || error.fields?.includes?.('seed')) {
+        res.status(409).json({ error: 'Participant seed is already assigned in this tournament' });
+      } else {
+        res.status(409).json({ error: 'Member is already a participant in this tournament' });
+      }
     } else {
       res.status(500).json({ error: error.message });
     }
@@ -181,7 +245,7 @@ async function getParticipants(req, res) {
     const { rows: participants, count } = await Participant.findAndCountAll({
       where: { tournamentId: tournament.id },
       include: { model: Member, as: 'member' },
-      order: [['id', 'ASC']],
+      order: getParticipantListOrder(),
       limit: pagination.limit,
       offset: pagination.offset,
     });
@@ -190,6 +254,71 @@ async function getParticipants(req, res) {
     res.json(participants);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+}
+
+async function updateParticipant(req, res) {
+  try {
+    const unsupportedFields = Object.keys(req.body).filter((field) => !ALLOWED_PARTICIPANT_UPDATE_FIELDS.includes(field));
+    if (unsupportedFields.length > 0) {
+      return res.status(400).json({ error: `Unsupported participant fields: ${unsupportedFields.join(', ')}` });
+    }
+
+    if (Object.keys(req.body).length === 0) {
+      return res.status(400).json({ error: 'At least one participant field is required' });
+    }
+
+    const parsedSeed = parseSeedValue(req.body.seed);
+    if (parsedSeed.error) {
+      return res.status(400).json({ error: parsedSeed.error });
+    }
+
+    const tournament = await Tournament.findByPk(req.params.id);
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    if (tournament.status !== PENDING_TOURNAMENT_STATUS) {
+      return res.status(409).json({ error: 'Participant seeding can only be updated while the tournament is pending' });
+    }
+
+    const participant = await Participant.findOne({
+      where: {
+        id: req.params.participant_id,
+        tournamentId: tournament.id,
+      },
+      include: { model: Member, as: 'member' },
+    });
+
+    if (!participant) {
+      return res.status(404).json({ error: 'Participant not found' });
+    }
+
+    if (parsedSeed.provided && tournament.type === 'single_elimination' && parsedSeed.value > tournament.size) {
+      return res.status(400).json({ error: 'Participant seed cannot exceed the tournament size' });
+    }
+
+    if (parsedSeed.provided) {
+      const seedConflict = await findSeedConflict(tournament.id, parsedSeed.value, {
+        excludeParticipantId: participant.id,
+      });
+
+      if (seedConflict) {
+        return res.status(409).json({ error: 'Participant seed is already assigned in this tournament' });
+      }
+    }
+
+    const updatedParticipant = await participant.update({
+      seed: parsedSeed.value,
+    });
+
+    res.json(updatedParticipant);
+  } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      res.status(409).json({ error: 'Participant seed is already assigned in this tournament' });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   }
 }
 
@@ -324,7 +453,7 @@ async function startTournament(req, res) {
         throw new Error('Invalid tournament type');
       }
 
-      const matches = generator(tournament.participants);
+      const matches = generator(sortParticipantsForSetup(tournament.participants));
 
       if (matches) {
         await Match.bulkCreate(getTournamentMatchesPayload(tournament, matches), { transaction });
@@ -558,6 +687,7 @@ module.exports = {
   deleteTournament,
   addParticipant,
   getParticipants,
+  updateParticipant,
   getStandings,
   startTournament,
   endTournament,

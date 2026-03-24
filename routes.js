@@ -23,6 +23,7 @@ module.exports = function (app) {
   // Participants
   app.post('/tournaments/:id/participants', (req, res) => tournamentController.addParticipant(req, res));
   app.get('/tournaments/:id/participants', (req, res) => tournamentController.getParticipants(req, res));
+  app.patch('/tournaments/:id/participants/:participant_id', (req, res) => tournamentController.updateParticipant(req, res));
   app.get('/tournaments/:id/standings', (req, res) => tournamentController.getStandings(req, res));
 
   // Matches
