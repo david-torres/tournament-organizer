@@ -83,6 +83,44 @@ paths:
                       format: float
 
   /tournaments:
+    get:
+      summary: List tournaments
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Filter tournaments by status
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - single_elimination
+              - round_robin
+              - swiss
+              - league
+          description: Filter tournaments by type
+      responses:
+        '200':
+          description: List of tournaments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    type:
+                      type: string
+                    size:
+                      type: integer
+                    status:
+                      type: string
     post:
       summary: Create a new tournament
       requestBody:
@@ -151,6 +189,109 @@ paths:
                     type: integer
                   status:
                     type: string
+        '404':
+          description: No active tournaments found
+
+  /tournaments/{id}:
+    get:
+      summary: Get a single tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Tournament detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  type:
+                    type: string
+                  size:
+                    type: integer
+                  status:
+                    type: string
+                  winnerId:
+                    type: integer
+                    nullable: true
+        '404':
+          description: Tournament not found
+
+    patch:
+      summary: Update tournament metadata or archive it
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                size:
+                  type: integer
+                  description: Pending single-elimination tournaments only
+                status:
+                  type: string
+                  enum:
+                    - archived
+                  description: Archive a non-active tournament
+      responses:
+        '200':
+          description: Tournament updated
+        '400':
+          description: Invalid update payload
+        '404':
+          description: Tournament not found
+        '409':
+          description: Update conflicts with the current tournament state
+
+    delete:
+      summary: Delete a non-active tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Tournament deleted
+        '404':
+          description: Tournament not found
+        '409':
+          description: Cannot delete an in-progress tournament
+
+  /tournaments/{id}/reset:
+    post:
+      summary: Reset a non-active tournament back to pending
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Tournament reset
+        '404':
+          description: Tournament not found
+        '409':
+          description: Cannot reset an in-progress tournament
 
   /tournaments/{id}/participants:
     post:
@@ -188,6 +329,8 @@ paths:
                     type: integer
         '404':
           description: Tournament or member not found
+        '409':
+          description: Tournament must be pending
         '500':
           description: Server error
 

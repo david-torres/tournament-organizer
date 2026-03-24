@@ -16,6 +16,11 @@ const MATCH_GENERATORS = {
   swiss: generateSwissMatches,
   league: () => null,
 };
+const INITIAL_PARTICIPANT_ELO = 1200;
+const ARCHIVED_TOURNAMENT_STATUS = 'archived';
+const PENDING_TOURNAMENT_STATUS = 'pending';
+const IN_PROGRESS_TOURNAMENT_STATUS = 'in_progress';
+const ALLOWED_TOURNAMENT_UPDATE_FIELDS = ['name', 'size', 'status'];
 
 function isSqliteBusyError(error) {
   return error?.parent?.code === 'SQLITE_BUSY' || error?.original?.code === 'SQLITE_BUSY' || error?.message?.includes('SQLITE_BUSY');
@@ -39,6 +44,41 @@ function getTournamentMatchesPayload(tournament, matches) {
   }));
 }
 
+function getTournamentFilters(query) {
+  const filters: any = {};
+
+  if (query.status) {
+    filters.status = query.status;
+  }
+
+  if (query.type) {
+    filters.type = query.type;
+  }
+
+  return filters;
+}
+
+function getUnsupportedUpdateFields(payload) {
+  return Object.keys(payload).filter((field) => !ALLOWED_TOURNAMENT_UPDATE_FIELDS.includes(field));
+}
+
+function canArchiveTournament(tournament) {
+  return tournament.status !== IN_PROGRESS_TOURNAMENT_STATUS;
+}
+
+async function getTournaments(req, res) {
+  try {
+    const tournaments = await Tournament.findAll({
+      where: getTournamentFilters(req.query),
+      order: [['id', 'DESC']],
+    });
+
+    res.json(tournaments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 async function createTournament(req, res) {
   try {
     const { type, size } = req.body;
@@ -60,6 +100,20 @@ async function createTournament(req, res) {
   }
 }
 
+async function getTournament(req, res) {
+  try {
+    const tournament = await Tournament.findByPk(req.params.id);
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    res.json(tournament);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 async function addParticipant(req, res) {
   try {
     const memberId = req.body.member_id;
@@ -72,6 +126,10 @@ async function addParticipant(req, res) {
     const tournament = await Tournament.findByPk(tournamentId);
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    if (tournament.status !== PENDING_TOURNAMENT_STATUS) {
+      return res.status(409).json({ error: 'Cannot add participants unless the tournament is pending' });
     }
 
     if (tournament.type === 'single_elimination') {
@@ -112,6 +170,81 @@ async function getParticipants(req, res) {
   }
 }
 
+async function updateTournament(req, res) {
+  try {
+    const unsupportedFields = getUnsupportedUpdateFields(req.body);
+    if (unsupportedFields.length > 0) {
+      return res.status(400).json({
+        error: `Unsupported tournament fields: ${unsupportedFields.join(', ')}`,
+      });
+    }
+
+    if (Object.keys(req.body).length === 0) {
+      return res.status(400).json({ error: 'At least one tournament field is required' });
+    }
+
+    const tournament = await Tournament.findByPk(req.params.id);
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    const updates: any = {};
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'name')) {
+      updates.name = req.body.name;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'status')) {
+      if (req.body.status !== ARCHIVED_TOURNAMENT_STATUS) {
+        return res.status(400).json({ error: 'Tournament status can only be updated to archived' });
+      }
+
+      if (!canArchiveTournament(tournament)) {
+        return res.status(409).json({ error: 'Cannot archive an in-progress tournament' });
+      }
+
+      updates.status = ARCHIVED_TOURNAMENT_STATUS;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'size')) {
+      if (tournament.type !== 'single_elimination') {
+        return res.status(400).json({ error: 'Tournament size can only be updated for single elimination tournaments' });
+      }
+
+      if (tournament.status !== PENDING_TOURNAMENT_STATUS) {
+        return res.status(409).json({ error: 'Tournament size can only be updated while the tournament is pending' });
+      }
+
+      if (!isPowerOfTwo(req.body.size)) {
+        return res.status(400).json({
+          error: 'Single elimination tournament `size` must be a power of 2 (2, 4, 8, 16...',
+        });
+      }
+
+      const participantCount = await Participant.count({
+        where: { tournamentId: tournament.id },
+      });
+
+      if (req.body.size < participantCount) {
+        return res.status(409).json({ error: 'Tournament size cannot be smaller than the current participant count' });
+      }
+
+      updates.size = req.body.size;
+    }
+
+    const updatedTournament = await tournament.update(updates);
+
+    res.json(updatedTournament);
+  } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      res.status(409).json({ error: 'Tournament must have a unique name' });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
+}
+
 async function startTournament(req, res) {
   try {
     const outcome = await sequelize.transaction(async (transaction) => {
@@ -125,16 +258,16 @@ async function startTournament(req, res) {
         return { status: 404, body: { error: 'Tournament not found' } };
       }
 
-      if (tournament.status !== 'pending') {
+      if (tournament.status !== PENDING_TOURNAMENT_STATUS) {
         return { status: 400, body: { error: 'Tournament has already been started' } };
       }
 
       const [updatedCount] = await Tournament.update(
-        { status: 'in_progress' },
+        { status: IN_PROGRESS_TOURNAMENT_STATUS },
         {
           where: {
             id: tournament.id,
-            status: 'pending',
+            status: PENDING_TOURNAMENT_STATUS,
           },
           transaction,
         },
@@ -183,7 +316,7 @@ async function endTournament(req, res) {
       return res.status(400).json({ error: 'Cannot end a non-league tournament' });
     }
 
-    if (tournament.status !== 'in_progress') {
+    if (tournament.status !== IN_PROGRESS_TOURNAMENT_STATUS) {
       return res.status(400).json({ error: 'Cannot end an unstarted tournament' });
     }
 
@@ -202,14 +335,99 @@ async function endTournament(req, res) {
 async function getLatestTournament(req, res) {
   try {
     const latestTournament = await Tournament.findOne({
+      where: {
+        status: { [Op.ne]: ARCHIVED_TOURNAMENT_STATUS },
+      },
       order: [['id', 'DESC']],
     });
 
     if (!latestTournament) {
-      return res.status(404).json({ error: 'No tournaments found' });
+      return res.status(404).json({ error: 'No active tournaments found' });
     }
 
     res.json(latestTournament);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+async function resetTournament(req, res) {
+  try {
+    const outcome = await sequelize.transaction(async (transaction) => {
+      const tournament = await Tournament.findByPk(req.params.id, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!tournament) {
+        return { status: 404, body: { error: 'Tournament not found' } };
+      }
+
+      if (tournament.status === IN_PROGRESS_TOURNAMENT_STATUS) {
+        return { status: 409, body: { error: 'Cannot reset an in-progress tournament' } };
+      }
+
+      await Match.destroy({
+        where: { tournamentId: tournament.id },
+        transaction,
+      });
+
+      await Participant.update(
+        { elo: INITIAL_PARTICIPANT_ELO },
+        {
+          where: { tournamentId: tournament.id },
+          transaction,
+        },
+      );
+
+      await tournament.update({
+        status: PENDING_TOURNAMENT_STATUS,
+        winnerId: null,
+      }, { transaction });
+
+      return { status: 200, body: { message: 'Tournament reset' } };
+    });
+
+    res.status(outcome.status).json(outcome.body);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+async function deleteTournament(req, res) {
+  try {
+    const outcome = await sequelize.transaction(async (transaction) => {
+      const tournament = await Tournament.findByPk(req.params.id, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!tournament) {
+        return { status: 404, body: { error: 'Tournament not found' } };
+      }
+
+      if (tournament.status === IN_PROGRESS_TOURNAMENT_STATUS) {
+        return { status: 409, body: { error: 'Cannot delete an in-progress tournament' } };
+      }
+
+      await Match.destroy({
+        where: { tournamentId: tournament.id },
+        transaction,
+      });
+
+      await Participant.destroy({
+        where: { tournamentId: tournament.id },
+        transaction,
+      });
+
+      await tournament.destroy({ transaction });
+
+      return { status: 200, body: { message: 'Tournament deleted' } };
+    });
+
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -225,7 +443,7 @@ async function decayElo(req, res) {
       return res.status(404).json({ error: 'Tournament not found' });
     }
 
-    if (tournament.status !== 'in_progress') {
+    if (tournament.status !== IN_PROGRESS_TOURNAMENT_STATUS) {
       return res.status(404).json({ error: 'No tournaments in progress' });
     }
 
@@ -277,7 +495,12 @@ async function decayElo(req, res) {
 }
 
 module.exports = {
+  getTournaments,
   createTournament,
+  getTournament,
+  updateTournament,
+  resetTournament,
+  deleteTournament,
   addParticipant,
   getParticipants,
   startTournament,

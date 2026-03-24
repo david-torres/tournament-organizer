@@ -61,8 +61,118 @@ async function getMatches(tournamentId, params = {}) {
   return response.json();
 }
 
+async function getTournament(tournamentId) {
+  const response = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournamentId}`,
+  });
+
+  assert.equal(response.statusCode, 200);
+  return response.json();
+}
+
+async function listTournaments(params = {}) {
+  const searchParams = new URLSearchParams(params).toString();
+  const suffix = searchParams ? `?${searchParams}` : '';
+
+  const response = await inject(app, {
+    method: 'GET',
+    url: `/tournaments${suffix}`,
+  });
+
+  assert.equal(response.statusCode, 200);
+  return response.json();
+}
+
 test.beforeEach(async () => {
   await models.sequelize.sync({ force: true });
+});
+
+test('GET /tournaments lists tournaments and GET /tournaments/:id returns a single tournament', async () => {
+  const firstTournament = await createTournament({
+    name: `HTTP List One ${Date.now()}`,
+    type: 'league',
+  });
+  const secondTournament = await createTournament({
+    name: `HTTP List Two ${Date.now()}`,
+    type: 'swiss',
+    size: 8,
+  });
+
+  const tournaments = await listTournaments();
+  assert.equal(tournaments.length, 2);
+  assert.equal(tournaments[0].id, secondTournament.id);
+  assert.equal(tournaments[1].id, firstTournament.id);
+
+  const detail = await getTournament(firstTournament.id);
+  assert.equal(detail.id, firstTournament.id);
+  assert.equal(detail.name, firstTournament.name);
+  assert.equal(detail.status, 'pending');
+});
+
+test('PATCH /tournaments/:id updates pending tournament metadata', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Patch Tournament ${Date.now()}`,
+    type: 'single_elimination',
+    size: 4,
+  });
+
+  const response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}`,
+    payload: {
+      name: `${tournament.name} Updated`,
+      size: 8,
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+
+  const updatedTournament = response.json();
+  assert.equal(updatedTournament.name, `${tournament.name} Updated`);
+  assert.equal(updatedTournament.size, 8);
+
+  const detail = await getTournament(tournament.id);
+  assert.equal(detail.name, `${tournament.name} Updated`);
+  assert.equal(detail.size, 8);
+});
+
+test('PATCH /tournaments/:id archives tournaments, latest ignores archived tournaments, and archived tournaments reject new participants', async () => {
+  const activeTournament = await createTournament({
+    name: `HTTP Active Tournament ${Date.now()}`,
+    type: 'league',
+  });
+  const archivedTournament = await createTournament({
+    name: `HTTP Archived Tournament ${Date.now()}`,
+    type: 'league',
+  });
+
+  const archiveResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${archivedTournament.id}`,
+    payload: { status: 'archived' },
+  });
+
+  assert.equal(archiveResponse.statusCode, 200);
+  assert.equal(archiveResponse.json().status, 'archived');
+
+  const latestResponse = await inject(app, {
+    method: 'GET',
+    url: '/tournaments/latest',
+  });
+
+  assert.equal(latestResponse.statusCode, 200);
+  assert.equal(latestResponse.json().id, activeTournament.id);
+
+  const member = await createMember(`Archived Member ${Date.now()}`);
+  const addParticipantResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${archivedTournament.id}/participants`,
+    payload: { member_id: member.id },
+  });
+
+  assert.equal(addParticipantResponse.statusCode, 409);
+  assert.match(addParticipantResponse.json().error, /pending/i);
 });
 
 test('PATCH /tournaments/:id/matches/:match_id accepts participant ids and completes a single-elimination tournament', async () => {
@@ -104,6 +214,78 @@ test('PATCH /tournaments/:id/matches/:match_id accepts participant ids and compl
   const refreshedTournament = await models.Tournament.findByPk(tournament.id);
   assert.equal(refreshedTournament.status, 'completed');
   assert.equal(refreshedTournament.winnerId, winnerParticipantId);
+});
+
+test('POST /tournaments/:id/reset clears completed tournament matches and winner state', async () => {
+  const winnerMember = await createMember(`Reset Winner ${Date.now()}`);
+  const loserMember = await createMember(`Reset Loser ${Date.now()}`);
+
+  const tournament = await createTournament({
+    name: `HTTP Reset ${Date.now()}`,
+    type: 'single_elimination',
+    size: 2,
+  });
+
+  await addParticipant(tournament.id, winnerMember.id);
+  await addParticipant(tournament.id, loserMember.id);
+  await startTournament(tournament.id);
+
+  const pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const updateResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${pendingMatches[0].id}`,
+    payload: { winner_id: pendingMatches[0].player1.id },
+  });
+  assert.equal(updateResponse.statusCode, 200);
+
+  const resetResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/reset`,
+  });
+  assert.equal(resetResponse.statusCode, 200);
+  assert.match(resetResponse.json().message, /reset/i);
+
+  const refreshedTournament = await models.Tournament.findByPk(tournament.id);
+  assert.equal(refreshedTournament.status, 'pending');
+  assert.equal(refreshedTournament.winnerId, null);
+
+  const remainingMatches = await models.Match.count({
+    where: { tournamentId: tournament.id },
+  });
+  assert.equal(remainingMatches, 0);
+});
+
+test('DELETE /tournaments/:id deletes pending tournaments and rejects in-progress tournaments', async () => {
+  const pendingTournament = await createTournament({
+    name: `HTTP Delete Pending ${Date.now()}`,
+    type: 'league',
+  });
+
+  const deletePendingResponse = await inject(app, {
+    method: 'DELETE',
+    url: `/tournaments/${pendingTournament.id}`,
+  });
+  assert.equal(deletePendingResponse.statusCode, 200);
+  assert.match(deletePendingResponse.json().message, /deleted/i);
+  assert.equal(await models.Tournament.findByPk(pendingTournament.id), null);
+
+  const activeTournament = await createTournament({
+    name: `HTTP Delete Active ${Date.now()}`,
+    type: 'league',
+  });
+
+  const startResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${activeTournament.id}/start`,
+  });
+  assert.equal(startResponse.statusCode, 200);
+
+  const deleteActiveResponse = await inject(app, {
+    method: 'DELETE',
+    url: `/tournaments/${activeTournament.id}`,
+  });
+  assert.equal(deleteActiveResponse.statusCode, 409);
+  assert.match(deleteActiveResponse.json().error, /in-progress/i);
 });
 
 test('GET /tournaments/:id/bracket?format=json returns bye matches for swiss tournaments', async () => {

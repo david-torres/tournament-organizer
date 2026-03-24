@@ -79,10 +79,15 @@ The API server will be running at `http://localhost:3000` (or the port specified
 | GET    | /members                               | Get a list of members                              |
 | GET    | /members/search?name=NAME              | Search for a member by name                        |
 | POST   | /members                               | Create a new member                                |
+| GET    | /tournaments                           | List tournaments, optionally filtered by status/type |
 | POST   | /tournaments                           | Create a new tournament                            |
 | GET    | /tournaments/latest                    | Get the most current active tournament             |
+| GET    | /tournaments/:id                       | Get a single tournament                            |
+| PATCH  | /tournaments/:id                       | Update tournament metadata or archive it           |
+| POST   | /tournaments/:id/reset                 | Reset a non-active tournament back to pending      |
+| DELETE | /tournaments/:id                       | Delete a non-active tournament                     |
 | GET    | /tournaments/:id/participants          | Get a list of tournament participants              |
-| POST   | /tournaments/:id/participants          | Add a member to a tournament                       |
+| POST   | /tournaments/:id/participants          | Add a member to a pending tournament               |
 | POST   | /tournaments/:id/start                 | Generate matches to start a tournament             |
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
 | GET    | /tournaments/:id/matches?status=STATUS | Get matches filtered by status (pending/completed)  |
@@ -91,6 +96,13 @@ The API server will be running at `http://localhost:3000` (or the port specified
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
 | POST   | /tournaments/:id/league                | End a league tournament                            |
 | POST   | /tournaments/:id/decay-elo             | Decay Elo scores for a league                      |
+
+Lifecycle notes:
+
+- `PATCH /tournaments/:id` supports `name`, `size` for pending single-elimination tournaments, and `status: "archived"` for non-active tournaments.
+- `GET /tournaments/latest` skips archived tournaments.
+- `POST /tournaments/:id/reset` deletes existing matches, clears the winner, and returns the tournament to `pending`.
+- `DELETE /tournaments/:id` and `POST /tournaments/:id/reset` reject in-progress tournaments.
 
 ## Bracket Visualization
 

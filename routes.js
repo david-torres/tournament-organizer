@@ -8,8 +8,13 @@ module.exports = function (app) {
   app.get('/members/search', (req, res) => memberController.searchMembers(req, res));
 
   // Tournaments
+  app.get('/tournaments', (req, res) => tournamentController.getTournaments(req, res));
   app.post('/tournaments', (req, res) => tournamentController.createTournament(req, res));
   app.get('/tournaments/latest', (req, res) => tournamentController.getLatestTournament(req, res));
+  app.get('/tournaments/:id', (req, res) => tournamentController.getTournament(req, res));
+  app.patch('/tournaments/:id', (req, res) => tournamentController.updateTournament(req, res));
+  app.post('/tournaments/:id/reset', (req, res) => tournamentController.resetTournament(req, res));
+  app.delete('/tournaments/:id', (req, res) => tournamentController.deleteTournament(req, res));
   app.post('/tournaments/:id/start', (req, res) => tournamentController.startTournament(req, res));
 
   // Bracket
