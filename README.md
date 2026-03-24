@@ -3,6 +3,7 @@
 A REST API for creating and managing tournaments, participants, and matches, with support for Elo ratings and bracket visualization.
 
 ## Tournament Types Supported
+- Double elimination
 - Single-elimination
 - Round robin
 - Swiss
@@ -10,7 +11,7 @@ A REST API for creating and managing tournaments, participants, and matches, wit
 
 ## Features
 
-- Generate seeded or organizer-controlled matches, supporting byes for the highest ranked players
+- Generate seeded or organizer-controlled matches, including standard single-elimination and double-elimination brackets
 - Store operational match details including scores, scheduling metadata, and controlled result correction for league play
 - Track member Elo scores across matches and tournaments
 - Leagues for regularly starting with a fresh Elo score and configurable Elo decay after a period of non-participation
@@ -105,9 +106,10 @@ Lifecycle notes:
 
 - Heavy list endpoints are paginated by default with `page` and `limit` query params. Current defaults are `page=1`, `limit=50`, with `limit` capped at `100`.
 - Paginated list responses keep the existing array body shape and expose metadata through the `X-Page`, `X-Limit`, `X-Total-Count`, and `X-Total-Pages` response headers.
-- `PATCH /tournaments/:id` supports `name`, `size` for pending single-elimination tournaments, and `status: "archived"` for non-active tournaments.
+- `PATCH /tournaments/:id` supports `name`, `size` for pending elimination tournaments, and `status: "archived"` for non-active tournaments.
 - `POST /tournaments/:id/participants` accepts an optional `seed`, and `PATCH /tournaments/:id/participants/:participant_id` lets organizers adjust seeds while the tournament is still pending.
-- Single-elimination `start` now uses bracket seeding placement instead of randomizing entrants, and round-robin/league setup respects the explicit seed order when generating fixtures.
+- Single-elimination and double-elimination `start` use bracket seeding placement instead of randomizing entrants, and round-robin/league setup respects the explicit seed order when generating fixtures.
+- Double-elimination tournaments require a full power-of-two field before they can start, track winners/losers/finals bracket segments on matches, and support a grand-final reset when the losers-bracket finalist wins the first final.
 - `GET /tournaments/latest` skips archived tournaments.
 - `GET /tournaments/:id/standings` works for every tournament type and exposes the tie-break order used for ranking.
 - `PATCH /tournaments/:id/matches/:match_id` now supports scheduling metadata (`scheduled_at`, `location`, `notes`), scores, draws for round-robin/league play, and forfeits.
@@ -136,6 +138,8 @@ HTML
 PNG
 
     GET http://localhost:3000/tournaments/:id/bracket?format=image
+
+For double-elimination tournaments, bracket JSON is segmented into `winners`, `losers`, and `finals` sections keyed by round number.
 
 ## Running the Simulation Script
 

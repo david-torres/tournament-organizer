@@ -60,6 +60,22 @@ test('createTournament rejects invalid single-elimination size with 400', async 
   assert.match(res.body.error, /power of 2/i);
 });
 
+test('createTournament rejects invalid double-elimination size with 400', async () => {
+  const req = {
+    body: {
+      name: 'Double Trouble',
+      type: 'double_elimination',
+      size: 6,
+    },
+  };
+  const res = createRes();
+
+  await tournamentController.createTournament(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.error, /power of 2/i);
+});
+
 test('createMember passes elo to the model layer', async () => {
   const originalCreate = models.Member.create;
   let receivedPayload = null;
@@ -305,6 +321,8 @@ test('getBracket serializes a bye match without throwing', async () => {
       1: [
         {
           id: 10,
+          bracket: null,
+          position: null,
           round: 1,
           player1: {
             id: 11,

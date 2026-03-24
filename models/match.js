@@ -9,6 +9,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    bracket: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    position: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     player1Id: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -109,6 +117,9 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     freezeTableName: true,
     indexes: [
+      {
+        fields: ['tournamentId', 'bracket', 'round', 'position'],
+      },
       {
         fields: ['tournamentId', 'player1Id', 'completedAt'],
       },

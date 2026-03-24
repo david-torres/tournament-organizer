@@ -173,6 +173,7 @@ test('GET /members paginates large member lists and exposes pagination headers',
 
 test('GET /tournaments/:id/standings exposes standings metadata for every tournament type', async () => {
   const tournamentFixtures = [
+    { type: 'double_elimination', size: 2 },
     { type: 'single_elimination', size: 2 },
     { type: 'round_robin', size: 2 },
     { type: 'swiss', size: 2 },
@@ -435,6 +436,118 @@ test('PATCH /tournaments/:id/matches/:match_id accepts participant ids and compl
   const refreshedTournament = await models.Tournament.findByPk(tournament.id);
   assert.equal(refreshedTournament.status, 'completed');
   assert.equal(refreshedTournament.winnerId, winnerParticipantId);
+});
+
+test('double-elimination tournaments create winners, losers, and finals matches and require a reset final when needed', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Double Elim ${Date.now()}`,
+    type: 'double_elimination',
+    size: 4,
+  });
+
+  const members = await Promise.all([
+    createMember(`Double Seed 1 ${Date.now()}`),
+    createMember(`Double Seed 4 ${Date.now()}`),
+    createMember(`Double Seed 2 ${Date.now()}`),
+    createMember(`Double Seed 3 ${Date.now()}`),
+  ]);
+
+  await addParticipant(tournament.id, members[0].id, { seed: 1 });
+  await addParticipant(tournament.id, members[1].id, { seed: 4 });
+  await addParticipant(tournament.id, members[2].id, { seed: 2 });
+  await addParticipant(tournament.id, members[3].id, { seed: 3 });
+
+  await startTournament(tournament.id);
+
+  const openingMatches = await getMatches(tournament.id, { status: 'pending' });
+  assert.equal(openingMatches.length, 2);
+  assert.ok(openingMatches.every((match) => match.bracket === 'winners'));
+
+  const topSeedOpeningMatch = openingMatches.find((match) => match.player1.member.name === members[0].name);
+  const secondOpeningMatch = openingMatches.find((match) => match.id !== topSeedOpeningMatch.id);
+
+  let response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${topSeedOpeningMatch.id}`,
+    payload: { winner_id: topSeedOpeningMatch.player1.id },
+  });
+  assert.equal(response.statusCode, 200);
+
+  response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${secondOpeningMatch.id}`,
+    payload: { winner_id: secondOpeningMatch.player2.id },
+  });
+  assert.equal(response.statusCode, 200);
+
+  let pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const losersRoundOne = pendingMatches.find((match) => match.bracket === 'losers' && match.round === 1);
+  const winnersFinal = pendingMatches.find((match) => match.bracket === 'winners' && match.round === 2);
+  assert.ok(losersRoundOne);
+  assert.ok(winnersFinal);
+
+  response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${losersRoundOne.id}`,
+    payload: { winner_id: losersRoundOne.player2.id },
+  });
+  assert.equal(response.statusCode, 200);
+
+  response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${winnersFinal.id}`,
+    payload: { winner_id: winnersFinal.player1.id },
+  });
+  assert.equal(response.statusCode, 200);
+
+  pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const losersFinal = pendingMatches.find((match) => match.bracket === 'losers' && match.round === 2);
+  assert.ok(losersFinal);
+
+  response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${losersFinal.id}`,
+    payload: { winner_id: losersFinal.player2.id },
+  });
+  assert.equal(response.statusCode, 200);
+
+  pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const grandFinal = pendingMatches.find((match) => match.bracket === 'finals' && match.round === 1);
+  assert.ok(grandFinal);
+
+  response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${grandFinal.id}`,
+    payload: { winner_id: grandFinal.player2.id },
+  });
+  assert.equal(response.statusCode, 200);
+
+  let refreshedTournament = await models.Tournament.findByPk(tournament.id);
+  assert.equal(refreshedTournament.status, 'in_progress');
+
+  pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const resetFinal = pendingMatches.find((match) => match.bracket === 'finals' && match.round === 2);
+  assert.ok(resetFinal);
+
+  response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${resetFinal.id}`,
+    payload: { winner_id: resetFinal.player2.id },
+  });
+  assert.equal(response.statusCode, 200);
+
+  refreshedTournament = await models.Tournament.findByPk(tournament.id);
+  assert.equal(refreshedTournament.status, 'completed');
+  assert.equal(refreshedTournament.winnerId, resetFinal.player2.id);
+
+  const bracketResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/bracket?format=json`,
+  });
+  assert.equal(bracketResponse.statusCode, 200);
+  assert.ok(bracketResponse.json().winners);
+  assert.ok(bracketResponse.json().losers);
+  assert.ok(bracketResponse.json().finals);
 });
 
 test('single-elimination start uses manual seed placement instead of randomized setup', async () => {

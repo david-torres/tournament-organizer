@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
   assignEffectiveSeeds,
+  buildDoubleEliminationPlan,
+  generateDoubleEliminationMatches,
   generateLeagueMatches,
   generateRoundRobinMatches,
   generateSwissMatches,
@@ -50,6 +52,31 @@ test('generateSingleEliminationMatches honors manual seeds with standard bracket
     { round: 1, player1Id: 102, player2Id: 101 },
     { round: 1, player1Id: 104, player2Id: 103 },
   ]);
+});
+
+test('generateDoubleEliminationMatches seeds the winners bracket opening round', () => {
+  const matches = generateDoubleEliminationMatches([
+    { id: 101, seed: 4 },
+    { id: 102, seed: 1 },
+    { id: 103, seed: 3 },
+    { id: 104, seed: 2 },
+  ]);
+
+  assert.deepStrictEqual(matches, [
+    { bracket: 'winners', round: 1, position: 1, player1Id: 102, player2Id: 101 },
+    { bracket: 'winners', round: 1, position: 2, player1Id: 104, player2Id: 103 },
+  ]);
+});
+
+test('buildDoubleEliminationPlan includes winners, losers, and finals nodes for four players', () => {
+  const plan = buildDoubleEliminationPlan(4);
+
+  assert.ok(plan.some((match) => match.id === 'W:1:1'));
+  assert.ok(plan.some((match) => match.id === 'W:2:1'));
+  assert.ok(plan.some((match) => match.id === 'L:1:1'));
+  assert.ok(plan.some((match) => match.id === 'L:2:1'));
+  assert.ok(plan.some((match) => match.id === 'F:1:1'));
+  assert.ok(plan.some((match) => match.id === 'F:2:1'));
 });
 
 test('assignEffectiveSeeds fills unseeded participants after explicit seeds', () => {

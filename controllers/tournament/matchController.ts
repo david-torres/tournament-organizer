@@ -7,6 +7,7 @@ const { updateElo } = require('../../utils');
 const { getPagination, setPaginationHeaders } = require('../../services/pagination');
 const { isMatchCompleted } = require('../../services/matchState');
 const {
+  advanceDoubleElimination,
   advanceSingleElimination,
   advanceRoundRobin,
   advanceLeague,
@@ -399,6 +400,7 @@ async function updateMatch(req, res) {
       }
 
       const advanceHandlers = {
+        double_elimination: advanceDoubleElimination,
         single_elimination: advanceSingleElimination,
         round_robin: advanceRoundRobin,
         league: advanceLeague,

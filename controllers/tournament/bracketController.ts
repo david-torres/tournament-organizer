@@ -25,6 +25,8 @@ function serializeParticipant(participant) {
 function serializeMatch(match) {
   return {
     id: match.id,
+    bracket: match.bracket ?? null,
+    position: match.position ?? null,
     round: match.round,
     player1: serializeParticipant(match.player1),
     player2: match.player2 ? serializeParticipant(match.player2) : null,
@@ -32,7 +34,7 @@ function serializeMatch(match) {
   };
 }
 
-function getBracketData(matches) {
+function getRoundBuckets(matches) {
   const rounds = {};
 
   matches.forEach((match) => {
@@ -47,9 +49,23 @@ function getBracketData(matches) {
   return rounds;
 }
 
+function getBracketData(tournament, matches) {
+  if (tournament.type !== 'double_elimination') {
+    return getRoundBuckets(matches);
+  }
+
+  return {
+    winners: getRoundBuckets(matches.filter((match) => match.bracket === 'winners')),
+    losers: getRoundBuckets(matches.filter((match) => match.bracket === 'losers')),
+    finals: getRoundBuckets(matches.filter((match) => match.bracket === 'finals')),
+  };
+}
+
 function getMatchStateFragment(match) {
   return [
     match.id,
+    match.bracket ?? 'main',
+    match.position ?? 'slot',
     match.round,
     match.player1Id ?? match.player1?.id ?? 'p1',
     match.player2Id ?? match.player2?.id ?? 'bye',
@@ -118,7 +134,7 @@ async function getBracket(req, res) {
       order: [['round', 'ASC'], ['id', 'ASC']],
     });
 
-    const bracketData = getBracketData(matches);
+    const bracketData = getBracketData(tournament, matches);
 
     if (format === 'json') {
       res.status(200).json(bracketData);

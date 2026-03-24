@@ -13,6 +13,20 @@
         main {
             display: flex;
             flex-direction: row;
+            gap: 24px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .bracket-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            margin: 0 0 8px;
+            text-transform: capitalize;
         }
 
         .round {
@@ -83,26 +97,44 @@
                     <%=tournament.name%> - <%=tournament.type%>
                 </h1>
                 <main id="tournament">
-                <% Object.keys(rounds).forEach(function(i) { %>
-
-                    <ul class="round round-<%= i %>">
-                        <li class="spacer">&nbsp;</li>
-                        <% for (var j=0; j < rounds[i].length; j++) { %>
-                            <li
-                                class="game game-top<% if (rounds[i][j].winner && rounds[i][j].player1 && rounds[i][j].winner.id === rounds[i][j].player1.id) { %> winner<% } %>">
-                                <%= rounds[i][j].player1 ? rounds[i][j].player1.name : 'TBD' %>
-                            </li>
-                            <li class="game game-spacer">&nbsp;</li>
-                            <li
-                                class="game game-bottom<% if (rounds[i][j].winner && rounds[i][j].player2 && rounds[i][j].winner.id === rounds[i][j].player2.id) { %> winner<% } %>">
-                                <%= rounds[i][j].player2 ? rounds[i][j].player2.name : 'BYE' %>
-                            </li>
-
-                            <li class="spacer">&nbsp;</li>
-
+                <% const bracketSections = tournament.type === 'double_elimination'
+                  ? [
+                    ['winners', rounds.winners || {}],
+                    ['losers', rounds.losers || {}],
+                    ['finals', rounds.finals || {}],
+                  ]
+                  : [['bracket', rounds]];
+                %>
+                <% bracketSections.forEach(function(section) { %>
+                    <% const sectionName = section[0]; %>
+                    <% const sectionRounds = section[1]; %>
+                    <% if (Object.keys(sectionRounds).length === 0) { return; } %>
+                    <section class="bracket-section">
+                        <% if (tournament.type === 'double_elimination') { %>
+                            <h2 class="section-title"><%= sectionName %> bracket</h2>
                         <% } %>
-                    </ul>
+                        <div style="display:flex; flex-direction:row;">
+                        <% Object.keys(sectionRounds).forEach(function(i) { %>
+                            <ul class="round round-<%= i %>">
+                                <li class="spacer">&nbsp;</li>
+                                <% for (var j=0; j < sectionRounds[i].length; j++) { %>
+                                    <li
+                                        class="game game-top<% if (sectionRounds[i][j].winner && sectionRounds[i][j].player1 && sectionRounds[i][j].winner.id === sectionRounds[i][j].player1.id) { %> winner<% } %>">
+                                        <%= sectionRounds[i][j].player1 ? sectionRounds[i][j].player1.name : 'TBD' %>
+                                    </li>
+                                    <li class="game game-spacer">&nbsp;</li>
+                                    <li
+                                        class="game game-bottom<% if (sectionRounds[i][j].winner && sectionRounds[i][j].player2 && sectionRounds[i][j].winner.id === sectionRounds[i][j].player2.id) { %> winner<% } %>">
+                                        <%= sectionRounds[i][j].player2 ? sectionRounds[i][j].player2.name : 'BYE' %>
+                                    </li>
 
+                                    <li class="spacer">&nbsp;</li>
+
+                                <% } %>
+                            </ul>
+                        <% }) %>
+                        </div>
+                    </section>
                 <% }) %>
                 </main>
             </div>

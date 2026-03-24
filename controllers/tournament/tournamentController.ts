@@ -7,6 +7,7 @@ const { isPowerOfTwo, decayElo: applyDecay } = require('../../utils');
 const { getStandingsForTournament } = require('../../services/standings');
 const { getPagination, setPaginationHeaders } = require('../../services/pagination');
 const {
+  generateDoubleEliminationMatches,
   generateSingleEliminationMatches,
   generateRoundRobinMatches,
   generateLeagueMatches,
@@ -15,6 +16,7 @@ const {
 } = require('../../services/matchGenerators');
 
 const MATCH_GENERATORS = {
+  double_elimination: generateDoubleEliminationMatches,
   single_elimination: generateSingleEliminationMatches,
   round_robin: generateRoundRobinMatches,
   swiss: generateSwissMatches,
@@ -26,6 +28,7 @@ const PENDING_TOURNAMENT_STATUS = 'pending';
 const IN_PROGRESS_TOURNAMENT_STATUS = 'in_progress';
 const ALLOWED_TOURNAMENT_UPDATE_FIELDS = ['name', 'size', 'status'];
 const ALLOWED_PARTICIPANT_UPDATE_FIELDS = ['seed'];
+const BRACKET_SIZE_TOURNAMENT_TYPES = new Set(['single_elimination', 'double_elimination']);
 
 function isSqliteBusyError(error) {
   return error?.parent?.code === 'SQLITE_BUSY' || error?.original?.code === 'SQLITE_BUSY' || error?.message?.includes('SQLITE_BUSY');
@@ -36,7 +39,15 @@ function getLeagueWinnerParticipantId(winnerParticipant) {
 }
 
 function hasReachedParticipantLimit(tournament, participantCount) {
-  return tournament.type === 'single_elimination' && participantCount === tournament.size;
+  return BRACKET_SIZE_TOURNAMENT_TYPES.has(tournament.type) && participantCount === tournament.size;
+}
+
+function requiresPowerOfTwoSize(type) {
+  return BRACKET_SIZE_TOURNAMENT_TYPES.has(type);
+}
+
+function requiresFullBracketBeforeStart(type) {
+  return type === 'double_elimination';
 }
 
 function getParticipantListOrder() {
@@ -51,6 +62,8 @@ function getTournamentMatchesPayload(tournament, matches) {
   const generatedAt = new Date();
 
   return matches.map((match) => ({
+    bracket: match.bracket ?? null,
+    position: match.position ?? null,
     round: match.round,
     player1Id: match.player1Id ?? null,
     player2Id: match.player2Id ?? null,
@@ -212,9 +225,9 @@ async function createTournament(req, res) {
   try {
     const { type, size } = req.body;
 
-    if (type === 'single_elimination' && !isPowerOfTwo(size)) {
+    if (requiresPowerOfTwoSize(type) && !isPowerOfTwo(size)) {
       return res.status(400).json({
-        error: 'Single elimination tournament `size` must be a power of 2 (2, 4, 8, 16...',
+        error: 'Elimination tournament `size` must be a power of 2 (2, 4, 8, 16...',
       });
     }
 
@@ -266,7 +279,7 @@ async function addParticipant(req, res) {
       return res.status(409).json({ error: 'Cannot add participants unless the tournament is pending' });
     }
 
-    if (tournament.type === 'single_elimination') {
+    if (BRACKET_SIZE_TOURNAMENT_TYPES.has(tournament.type)) {
       const participants = await Participant.count({
         where: { tournamentId },
       });
@@ -276,7 +289,7 @@ async function addParticipant(req, res) {
       }
     }
 
-    if (parsedSeed.provided && tournament.type === 'single_elimination' && parsedSeed.value > tournament.size) {
+    if (parsedSeed.provided && BRACKET_SIZE_TOURNAMENT_TYPES.has(tournament.type) && parsedSeed.value > tournament.size) {
       return res.status(400).json({ error: 'Participant seed cannot exceed the tournament size' });
     }
 
@@ -368,7 +381,7 @@ async function updateParticipant(req, res) {
       return res.status(404).json({ error: 'Participant not found' });
     }
 
-    if (parsedSeed.provided && tournament.type === 'single_elimination' && parsedSeed.value > tournament.size) {
+    if (parsedSeed.provided && BRACKET_SIZE_TOURNAMENT_TYPES.has(tournament.type) && parsedSeed.value > tournament.size) {
       return res.status(400).json({ error: 'Participant seed cannot exceed the tournament size' });
     }
 
@@ -453,8 +466,8 @@ async function updateTournament(req, res) {
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'size')) {
-      if (tournament.type !== 'single_elimination') {
-        return res.status(400).json({ error: 'Tournament size can only be updated for single elimination tournaments' });
+      if (!BRACKET_SIZE_TOURNAMENT_TYPES.has(tournament.type)) {
+        return res.status(400).json({ error: 'Tournament size can only be updated for elimination tournaments' });
       }
 
       if (tournament.status !== PENDING_TOURNAMENT_STATUS) {
@@ -463,7 +476,7 @@ async function updateTournament(req, res) {
 
       if (!isPowerOfTwo(req.body.size)) {
         return res.status(400).json({
-          error: 'Single elimination tournament `size` must be a power of 2 (2, 4, 8, 16...',
+          error: 'Elimination tournament `size` must be a power of 2 (2, 4, 8, 16...',
         });
       }
 
@@ -505,6 +518,10 @@ async function startTournament(req, res) {
 
       if (tournament.status !== PENDING_TOURNAMENT_STATUS) {
         return { status: 400, body: { error: 'Tournament has already been started' } };
+      }
+
+      if (requiresFullBracketBeforeStart(tournament.type) && tournament.participants.length !== tournament.size) {
+        return { status: 400, body: { error: 'Double elimination tournaments require a full field before start' } };
       }
 
       const [updatedCount] = await Tournament.update(

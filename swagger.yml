@@ -123,6 +123,7 @@ paths:
           schema:
             type: string
             enum:
+              - double_elimination
               - single_elimination
               - round_robin
               - swiss
@@ -178,13 +179,14 @@ paths:
                 type:
                   type: string
                   enum:
+                    - double_elimination
                     - single_elimination
                     - round_robin
                     - swiss
                     - league
                 size:
                   type: integer
-                  description: Required for single_elimination (must be power of 2)
+                  description: Required for double_elimination and single_elimination (must be power of 2)
       responses:
         '201':
           description: New tournament created
@@ -284,7 +286,7 @@ paths:
                   type: string
                 size:
                   type: integer
-                  description: Pending single-elimination tournaments only
+                  description: Pending double-elimination and single-elimination tournaments only
                 status:
                   type: string
                   enum:
@@ -612,6 +614,12 @@ paths:
                       type: integer
                     round:
                       type: integer
+                    bracket:
+                      type: string
+                      nullable: true
+                    position:
+                      type: integer
+                      nullable: true
                     player1Id:
                       type: integer
                       nullable: true
@@ -674,6 +682,12 @@ paths:
                     type: integer
                   round:
                     type: integer
+                  bracket:
+                    type: string
+                    nullable: true
+                  position:
+                    type: integer
+                    nullable: true
                   player1Id:
                     type: integer
                   player2Id:
@@ -745,6 +759,12 @@ paths:
                     type: integer
                   round:
                     type: integer
+                  bracket:
+                    type: string
+                    nullable: true
+                  position:
+                    type: integer
+                    nullable: true
                   player1Id:
                     type: integer
                   player2Id:

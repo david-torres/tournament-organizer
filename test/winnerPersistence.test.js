@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  advanceDoubleElimination,
   advanceSingleElimination,
   advanceLeague,
   advanceRoundRobin,
@@ -88,6 +89,43 @@ test('single-elimination advancement persists tournament winnerId after the fina
 
   assert.equal(refreshedTournament.status, 'completed');
   assert.equal(refreshedTournament.winnerId, winnerParticipant.id);
+});
+
+test('double-elimination advancement persists tournament winnerId after the reset final', async () => {
+  await models.sequelize.sync({ force: true });
+
+  const tournament = await models.Tournament.create({
+    name: `Double Elimination Winner ${Date.now()}`,
+    type: 'double_elimination',
+    size: 4,
+    status: 'in_progress',
+  });
+
+  const participantA = await createParticipant(tournament, 'Double A');
+  const participantB = await createParticipant(tournament, 'Double B');
+  const participantC = await createParticipant(tournament, 'Double C');
+  const participantD = await createParticipant(tournament, 'Double D');
+
+  await models.Match.bulkCreate([
+    { bracket: 'winners', round: 1, position: 1, player1Id: participantA.id, player2Id: participantD.id, winnerId: participantA.id, tournamentId: tournament.id },
+    { bracket: 'winners', round: 1, position: 2, player1Id: participantB.id, player2Id: participantC.id, winnerId: participantC.id, tournamentId: tournament.id },
+    { bracket: 'losers', round: 1, position: 1, player1Id: participantD.id, player2Id: participantB.id, winnerId: participantB.id, tournamentId: tournament.id },
+    { bracket: 'winners', round: 2, position: 1, player1Id: participantA.id, player2Id: participantC.id, winnerId: participantA.id, tournamentId: tournament.id },
+    { bracket: 'losers', round: 2, position: 1, player1Id: participantB.id, player2Id: participantC.id, winnerId: participantC.id, tournamentId: tournament.id },
+    { bracket: 'finals', round: 1, position: 1, player1Id: participantA.id, player2Id: participantC.id, winnerId: participantC.id, tournamentId: tournament.id },
+    { bracket: 'finals', round: 2, position: 1, player1Id: participantA.id, player2Id: participantC.id, winnerId: participantC.id, tournamentId: tournament.id },
+  ]);
+
+  const loadedTournament = await models.Tournament.findByPk(tournament.id, {
+    include: { model: models.Participant, as: 'participants' },
+  });
+
+  await advanceDoubleElimination(loadedTournament);
+
+  const refreshedTournament = await models.Tournament.findByPk(tournament.id);
+
+  assert.equal(refreshedTournament.status, 'completed');
+  assert.equal(refreshedTournament.winnerId, participantC.id);
 });
 
 test('round-robin advancement persists the standings winner using head-to-head resolution', async () => {

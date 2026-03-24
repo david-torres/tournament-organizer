@@ -1,5 +1,18 @@
 export {};
 
+type DoubleEliminationSource =
+  | { type: 'seed'; seed: number }
+  | { type: 'winner'; matchId: string }
+  | { type: 'loser'; matchId: string };
+
+type DoubleEliminationNode = {
+  id: string;
+  bracket: 'winners' | 'losers' | 'finals';
+  round: number;
+  position: number;
+  sources: DoubleEliminationSource[];
+};
+
 function normalizeParticipant(participant) {
   if (participant && typeof participant.get === 'function') {
     return participant.get({ plain: true });
@@ -102,6 +115,112 @@ function buildSingleEliminationSeedPositions(size) {
   }
 
   return positions;
+}
+
+function getDoubleEliminationMatchId(bracket, round, position) {
+  const bracketPrefixByType = {
+    winners: 'W',
+    losers: 'L',
+    finals: 'F',
+  };
+
+  return `${bracketPrefixByType[bracket]}:${round}:${position}`;
+}
+
+function createDoubleEliminationNode(bracket, round, position, sources): DoubleEliminationNode {
+  return {
+    id: getDoubleEliminationMatchId(bracket, round, position),
+    bracket,
+    round,
+    position,
+    sources,
+  };
+}
+
+function buildDoubleEliminationPlan(participantCount) {
+  const totalWinnerRounds = Math.log2(participantCount);
+
+  if (!Number.isInteger(totalWinnerRounds) || participantCount < 2) {
+    return [];
+  }
+
+  const seedPositions = buildSingleEliminationSeedPositions(participantCount);
+  const plan: DoubleEliminationNode[] = [];
+
+  for (let round = 1; round <= totalWinnerRounds; round += 1) {
+    const matchCount = participantCount / (2 ** round);
+
+    for (let position = 1; position <= matchCount; position += 1) {
+      const sources = round === 1
+        ? [
+          { type: 'seed', seed: seedPositions[(position - 1) * 2] },
+          { type: 'seed', seed: seedPositions[((position - 1) * 2) + 1] },
+        ]
+        : [
+          { type: 'winner', matchId: getDoubleEliminationMatchId('winners', round - 1, (position * 2) - 1) },
+          { type: 'winner', matchId: getDoubleEliminationMatchId('winners', round - 1, position * 2) },
+        ];
+
+      plan.push(createDoubleEliminationNode('winners', round, position, sources));
+    }
+  }
+
+  if (totalWinnerRounds === 1) {
+    const openingFinalId = getDoubleEliminationMatchId('winners', 1, 1);
+
+    plan.push(createDoubleEliminationNode('finals', 1, 1, [
+      { type: 'winner', matchId: openingFinalId },
+      { type: 'loser', matchId: openingFinalId },
+    ]));
+    plan.push(createDoubleEliminationNode('finals', 2, 1, [
+      { type: 'winner', matchId: openingFinalId },
+      { type: 'loser', matchId: openingFinalId },
+    ]));
+
+    return plan;
+  }
+
+  const totalLoserRounds = (totalWinnerRounds * 2) - 2;
+
+  for (let round = 1; round <= totalLoserRounds; round += 1) {
+    const matchCount = participantCount / (2 ** (Math.floor((round + 1) / 2) + 1));
+    const isOddRound = round % 2 === 1;
+
+    for (let position = 1; position <= matchCount; position += 1) {
+      let sources: DoubleEliminationSource[];
+
+      if (round === 1) {
+        sources = [
+          { type: 'loser', matchId: getDoubleEliminationMatchId('winners', 1, (position * 2) - 1) },
+          { type: 'loser', matchId: getDoubleEliminationMatchId('winners', 1, position * 2) },
+        ];
+      } else if (isOddRound) {
+        sources = [
+          { type: 'winner', matchId: getDoubleEliminationMatchId('losers', round - 1, (position * 2) - 1) },
+          { type: 'winner', matchId: getDoubleEliminationMatchId('losers', round - 1, position * 2) },
+        ];
+      } else {
+        const sourceWinnerRound = Math.floor(round / 2) + 1;
+        sources = [
+          { type: 'winner', matchId: getDoubleEliminationMatchId('losers', round - 1, position) },
+          { type: 'loser', matchId: getDoubleEliminationMatchId('winners', sourceWinnerRound, position) },
+        ];
+      }
+
+      plan.push(createDoubleEliminationNode('losers', round, position, sources));
+    }
+  }
+
+  plan.push(createDoubleEliminationNode('finals', 1, 1, [
+    { type: 'winner', matchId: getDoubleEliminationMatchId('winners', totalWinnerRounds, 1) },
+    { type: 'winner', matchId: getDoubleEliminationMatchId('losers', totalLoserRounds, 1) },
+  ]));
+  plan.push(createDoubleEliminationNode('finals', 2, 1, [
+    { type: 'winner', matchId: getDoubleEliminationMatchId('winners', totalWinnerRounds, 1) },
+    { type: 'winner', matchId: getDoubleEliminationMatchId('losers', totalLoserRounds, 1) },
+  ]));
+
+  return plan;
 }
 
 function getPairKey(player1Id, player2Id) {
@@ -262,6 +381,31 @@ function generateSingleEliminationMatches(participants) {
   return matches;
 }
 
+function generateDoubleEliminationMatches(participants) {
+  const seededParticipants = assignEffectiveSeeds(participants);
+  const participantsBySeed = new Map(seededParticipants.map((participant) => [participant.effectiveSeed, participant]));
+  const openingRound = buildDoubleEliminationPlan(seededParticipants.length)
+    .filter((node) => node.bracket === 'winners' && node.round === 1);
+
+  return openingRound.map((match) => {
+    const [player1Source, player2Source] = match.sources;
+    if (player1Source.type !== 'seed' || player2Source.type !== 'seed') {
+      throw new Error('Double-elimination opening matches must originate from bracket seeds');
+    }
+
+    const player1 = participantsBySeed.get(player1Source.seed);
+    const player2 = participantsBySeed.get(player2Source.seed);
+
+    return {
+      bracket: match.bracket,
+      round: match.round,
+      position: match.position,
+      player1Id: player1.id,
+      player2Id: player2.id,
+    };
+  });
+}
+
 function generateRoundRobinMatches(participants) {
   const matches = [];
   const workingParticipants = sortParticipantsForSetup(participants);
@@ -308,6 +452,9 @@ function generateSwissMatches(participants, existingMatches = []) {
 
 module.exports = {
   assignEffectiveSeeds,
+  buildDoubleEliminationPlan,
+  getDoubleEliminationMatchId,
+  generateDoubleEliminationMatches,
   generateSingleEliminationMatches,
   generateRoundRobinMatches,
   generateLeagueMatches,
