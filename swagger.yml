@@ -430,7 +430,7 @@ paths:
 
   /tournaments/{id}/start:
     post:
-      summary: Generate matches to start a tournament
+      summary: Start a tournament and generate its initial matches or season fixtures
       parameters:
         - in: path
           name: id
@@ -507,7 +507,7 @@ paths:
           description: Tournament not found
 
     post:
-      summary: Create a new match (league tournaments only)
+      summary: Create a manual match when no scheduled league fixtures exist
       parameters:
         - in: path
           name: id
@@ -547,7 +547,9 @@ paths:
                   player2Id:
                     type: integer
         '400':
-          description: Cannot create matches for a non-league tournament
+          description: Manual match creation is only supported for league tournaments
+        '409':
+          description: Scheduled league fixtures already exist
         '404':
           description: Tournament or participant not found
         '409':
@@ -651,7 +653,7 @@ paths:
 
   /tournaments/{id}/league:
     post:
-      summary: End a league tournament
+      summary: Finalize a fully played league season
       parameters:
         - in: path
           name: id
@@ -670,6 +672,8 @@ paths:
                     type: string
         '404':
           description: Tournament not found
+        '409':
+          description: League still has incomplete scheduled fixtures
         '500':
           description: Server error
 

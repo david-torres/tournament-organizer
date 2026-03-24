@@ -196,6 +196,10 @@ function generateRoundRobinMatches(participants) {
   return matches;
 }
 
+function generateLeagueMatches(participants) {
+  return generateRoundRobinMatches(participants);
+}
+
 function generateSwissMatches(participants, existingMatches = []) {
   const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((match) => match.round)) + 1 : 1;
   const blockedPairs = buildSwissBlockedPairs(participants, existingMatches, currentRound);
@@ -205,5 +209,6 @@ function generateSwissMatches(participants, existingMatches = []) {
 module.exports = {
   generateSingleEliminationMatches,
   generateRoundRobinMatches,
+  generateLeagueMatches,
   generateSwissMatches,
 };

@@ -8,6 +8,7 @@ const { getStandingsForTournament } = require('../../services/standings');
 const {
   generateSingleEliminationMatches,
   generateRoundRobinMatches,
+  generateLeagueMatches,
   generateSwissMatches,
 } = require('../../services/matchGenerators');
 
@@ -15,7 +16,7 @@ const MATCH_GENERATORS = {
   single_elimination: generateSingleEliminationMatches,
   round_robin: generateRoundRobinMatches,
   swiss: generateSwissMatches,
-  league: () => null,
+  league: generateLeagueMatches,
 };
 const INITIAL_PARTICIPANT_ELO = 1200;
 const ARCHIVED_TOURNAMENT_STATUS = 'archived';
@@ -28,7 +29,7 @@ function isSqliteBusyError(error) {
 }
 
 function getLeagueWinnerParticipantId(winnerParticipant) {
-  return winnerParticipant.id;
+  return winnerParticipant.participantId ?? winnerParticipant.id;
 }
 
 function hasReachedParticipantLimit(tournament, participantCount) {
@@ -324,8 +325,10 @@ async function startTournament(req, res) {
 async function endTournament(req, res) {
   try {
     const tournament = await Tournament.findByPk(req.params.id, {
-      include: { model: Participant, as: 'participants', include: { model: Member, as: 'member' } },
-      order: [[{ model: Participant, as: 'participants' }, 'elo', 'DESC']],
+      include: [
+        { model: Participant, as: 'participants', include: { model: Member, as: 'member' } },
+        { model: Match, as: 'matches' },
+      ],
     });
 
     if (!tournament) {
@@ -336,11 +339,22 @@ async function endTournament(req, res) {
       return res.status(400).json({ error: 'Cannot end a non-league tournament' });
     }
 
+    if (tournament.status === 'completed') {
+      return res.status(200).json({ message: 'Tournament already completed' });
+    }
+
     if (tournament.status !== IN_PROGRESS_TOURNAMENT_STATUS) {
       return res.status(400).json({ error: 'Cannot end an unstarted tournament' });
     }
 
-    const winner = tournament.participants[0];
+    const incompleteMatches = tournament.matches.filter((match) => match.winnerId == null);
+    if (incompleteMatches.length > 0) {
+      return res.status(409).json({ error: 'Cannot end a league before all scheduled fixtures are completed' });
+    }
+
+    const standings = getStandingsForTournament(tournament, tournament.participants, tournament.matches);
+    const winner = standings.standings[0];
+
     await tournament.update({
       status: 'completed',
       winnerId: getLeagueWinnerParticipantId(winner),

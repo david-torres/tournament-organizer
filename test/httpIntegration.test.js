@@ -329,6 +329,48 @@ test('DELETE /tournaments/:id deletes pending tournaments and rejects in-progres
   assert.match(deleteActiveResponse.json().error, /in-progress/i);
 });
 
+test('league start generates a scheduled season and league completion is automatic after the final fixture', async () => {
+  const tournament = await createTournament({
+    name: `HTTP League Schedule ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`League One ${Date.now()}`),
+    createMember(`League Two ${Date.now()}`),
+    createMember(`League Three ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const scheduledMatches = await getMatches(tournament.id, { status: 'pending' });
+  assert.equal(scheduledMatches.length, 3);
+
+  for (const match of scheduledMatches) {
+    const response = await inject(app, {
+      method: 'PATCH',
+      url: `/tournaments/${tournament.id}/matches/${match.id}`,
+      payload: { winner_id: match.player1.id },
+    });
+
+    assert.equal(response.statusCode, 200);
+  }
+
+  const refreshedTournament = await models.Tournament.findByPk(tournament.id);
+  assert.equal(refreshedTournament.status, 'completed');
+  assert.notEqual(refreshedTournament.winnerId, null);
+
+  const standings = await getStandings(tournament.id);
+  assert.equal(standings.status, 'completed');
+  assert.equal(standings.tieBreakOrder[0], 'wins');
+  assert.equal(standings.standings[0].participantId, refreshedTournament.winnerId);
+  assert.equal(standings.standings[0].isWinner, true);
+});
+
 test('GET /tournaments/:id/bracket?format=json returns bye matches for swiss tournaments', async () => {
   const tournament = await createTournament({
     name: `HTTP Swiss ${Date.now()}`,
@@ -430,9 +472,9 @@ test('GET /tournaments/:id/bracket?format=html renders swiss bye matches as HTML
   assert.match(bracketResponse.body, /Html One|Html Two|Html Three/);
 });
 
-test('PATCH /tournaments/:id/matches/:match_id rejects replaying a completed match', async () => {
+test('POST /tournaments/:id/matches rejects manual league match creation once scheduled fixtures exist', async () => {
   const tournament = await createTournament({
-    name: `HTTP Match Replay ${Date.now()}`,
+    name: `HTTP Manual League Match ${Date.now()}`,
     type: 'league',
   });
 
@@ -447,24 +489,41 @@ test('PATCH /tournaments/:id/matches/:match_id rejects replaying a completed mat
 
   await startTournament(tournament.id);
 
-  const participantsResponse = await inject(app, {
-    method: 'GET',
-    url: `/tournaments/${tournament.id}/participants`,
-  });
-  assert.equal(participantsResponse.statusCode, 200);
-
-  const participants = participantsResponse.json();
   const createMatchResponse = await inject(app, {
     method: 'POST',
     url: `/tournaments/${tournament.id}/matches`,
     payload: {
-      participant1: participants[0].id,
-      participant2: participants[1].id,
+      participant1: 1,
+      participant2: 2,
     },
   });
-  assert.equal(createMatchResponse.statusCode, 201);
 
-  const match = createMatchResponse.json();
+  assert.equal(createMatchResponse.statusCode, 409);
+  assert.match(createMatchResponse.json().error, /generated automatically/i);
+});
+
+test('PATCH /tournaments/:id/matches/:match_id rejects replaying a completed match', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Match Replay ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`Replay Winner ${Date.now()}`),
+    createMember(`Replay Loser ${Date.now()}`),
+    createMember(`Replay Third ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const scheduledMatches = await getMatches(tournament.id, { status: 'pending' });
+  assert.equal(scheduledMatches.length, 3);
+
+  const match = scheduledMatches[0];
   const firstResponse = await inject(app, {
     method: 'PATCH',
     url: `/tournaments/${tournament.id}/matches/${match.id}`,

@@ -24,13 +24,6 @@ function displayMatchResults(matches) {
     console.log('------------------------------------\n');
 }
 
-function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-}
-
 async function main() {
     try {
         const tournament = await client.createTournament(`Demo League ${Math.round(Math.random() * 10000)}`, TOURNAMENT_TYPE, PLAYER_COUNT);
@@ -47,81 +40,17 @@ async function main() {
 
         await client.startTournament(tournamentId);
 
-        let tournamentCompleted = false;
+        const scheduledMatches = await client.getMatches(tournamentId, { status: 'pending' });
+        console.log(`Generated ${scheduledMatches.length} league fixtures`);
 
-        while (!tournamentCompleted) {
-            // create a random number of matches between (10 and 20)
-            const matchCount = Math.floor(Math.random() * 10) + 10;
+        await Promise.all(scheduledMatches.map((match) => {
+            const winnerId = Math.random() < 0.5 ? match.player1.id : match.player2.id;
+            const winnerName = winnerId === match.player1.id ? match.player1.member.name : match.player2.member.name;
+            console.log(`Match ID: ${match.id} | ${match.player1.member.name} vs ${match.player2.member.name} | Winner: ${winnerName}`);
+            return client.updateMatch(tournamentId, match.id, winnerId);
+        }));
 
-            // randomly select two participants to play against each other
-            const participants = await client.getParticipants(tournamentId);
-            const participantIds = participants.map((participant) => participant.id);
-
-            // Duplicate the array to allow each participant to play more than once
-            let doubledParticipantIds = [...participantIds, ...participantIds];
-
-            // Shuffle the array
-            shuffle(doubledParticipantIds);
-
-            // Generate the matches
-            let matchParticipants = [];
-            for (let i = 0; matchParticipants.length < matchCount;) {
-                // Check if i or i+1 are out of bounds
-                if (i >= doubledParticipantIds.length - 1) {
-                    // Shuffle the remaining elements and reset i
-                    shuffle(doubledParticipantIds.slice(i));
-                    i = 0;
-                    continue;
-                }
-
-                // Ensure that a participant never plays themselves
-                if (doubledParticipantIds[i] !== doubledParticipantIds[i + 1]) {
-                    matchParticipants.push([doubledParticipantIds[i], doubledParticipantIds[i + 1]]);
-                    i += 2; // Increment by 2 to skip the used pair
-                } else {
-                    // If a participant is paired with themselves, shuffle the remaining elements and try again
-                    const remaining = doubledParticipantIds.slice(i);
-                    shuffle(remaining);
-                    doubledParticipantIds.splice(i, remaining.length, ...remaining);
-                }
-            }
-
-            // create the matches
-            console.log(`Creating ${matchCount} matches`);
-            let matches;
-            try {
-                matches = await Promise.all(Array.from({ length: matchCount }, async (_, index) => {
-                    // fetch two participants from the list
-                    const match = matchParticipants[index];
-                    const player1Id = match[0];
-                    const player2Id = match[1];
-
-                    console.log(`Creating match: ${player1Id} vs ${player2Id}`);
-                    return client.createMatch(tournamentId, player1Id, player2Id)
-                }));
-            } catch (error) {
-                console.log(error.message);
-                continue;
-            }
-
-            // Simulate the matches
-            try {
-                await Promise.all(matches.map((match) => {
-                    const winnerId = Math.random() < 0.5 ? match.player1.id : match.player2.id;
-                    // get the winning member name
-                    const winnerName = winnerId === match.player1.id ? match.player1.member.name : match.player2.member.name;
-                    console.log(`Match ID: ${match.id} | ${match.player1.member.name} vs ${match.player2.member.name} | Winner: ${winnerName}`);
-                    return client.updateMatch(tournamentId, match.id, winnerId);
-                }));
-            } catch (error) {
-                console.log(error.message);
-                continue;
-            }
-
-            // mark the league as completed
-            tournamentCompleted = await client.endTournament(tournamentId);
-            console.log(`Tournament ${tournamentId} completed`);
-        }
+        console.log(`Tournament ${tournamentId} completed`);
 
         // Get the final standings, list all participants in order of their Elo score
         const participantsFinal = await client.getParticipants(tournamentId);

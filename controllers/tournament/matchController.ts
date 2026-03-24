@@ -7,6 +7,7 @@ const { updateElo } = require('../../utils');
 const {
   advanceSingleElimination,
   advanceRoundRobin,
+  advanceLeague,
   advanceSwiss,
 } = require('../../services/tournamentAdvancers');
 
@@ -50,11 +51,15 @@ async function createMatch(req, res) {
       }
 
       if (tournament.type !== 'league') {
-        return { status: 400, body: { error: 'Cannot create matches for a non-league tournament' } };
+        return { status: 400, body: { error: 'Manual match creation is only supported for league tournaments' } };
       }
 
       if (tournament.status !== 'in_progress') {
         return { status: 404, body: { error: 'Tournament not yet started' } };
+      }
+
+      if (await Match.count({ where: { tournamentId }, transaction, lock: transaction.LOCK.UPDATE }) > 0) {
+        return { status: 409, body: { error: 'League fixtures are generated automatically when the tournament starts' } };
       }
 
       const participant1 = tournament.participants.find((participant) => participant.id === parseInt(participant1Id, 10));
@@ -173,6 +178,7 @@ async function updateMatch(req, res) {
       const advanceHandlers = {
         single_elimination: advanceSingleElimination,
         round_robin: advanceRoundRobin,
+        league: advanceLeague,
         swiss: advanceSwiss,
       };
 

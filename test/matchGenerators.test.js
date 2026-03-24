@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  generateLeagueMatches,
   generateRoundRobinMatches,
   generateSwissMatches,
 } = require('../services/matchGenerators');
@@ -25,6 +26,14 @@ test('generateRoundRobinMatches produces every unique pairing exactly once', () 
 
   const pairKeys = matches.map(normalizePair);
   assert.equal(new Set(pairKeys).size, 6);
+});
+
+test('generateLeagueMatches produces the same scheduled season as round robin pairings', () => {
+  const participants = makeParticipants(4);
+  const leagueMatches = generateLeagueMatches(participants);
+
+  assert.equal(leagueMatches.length, 6);
+  assert.equal(new Set(leagueMatches.map(normalizePair)).size, 6);
 });
 
 test('generateSwissMatches assigns one bye and avoids rematches in later rounds', () => {

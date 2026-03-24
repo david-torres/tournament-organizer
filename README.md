@@ -89,13 +89,13 @@ The API server will be running at `http://localhost:3000` (or the port specified
 | GET    | /tournaments/:id/participants          | Get a list of tournament participants              |
 | GET    | /tournaments/:id/standings             | Get computed standings and tie-break metadata      |
 | POST   | /tournaments/:id/participants          | Add a member to a pending tournament               |
-| POST   | /tournaments/:id/start                 | Generate matches to start a tournament             |
+| POST   | /tournaments/:id/start                 | Start a tournament and generate its initial matches or season fixtures |
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
 | GET    | /tournaments/:id/matches?status=STATUS | Get matches filtered by status (pending/completed)  |
-| POST   | /tournaments/:id/matches               | Create a new match (league tournaments only)       |
+| POST   | /tournaments/:id/matches               | Create a manual match when no scheduled league fixtures exist |
 | PATCH  | /tournaments/:id/matches/:match_id     | Update a match (set the winner by participant id)  |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
-| POST   | /tournaments/:id/league                | End a league tournament                            |
+| POST   | /tournaments/:id/league                | Compatibility endpoint to finalize a fully played league season |
 | POST   | /tournaments/:id/decay-elo             | Decay Elo scores for a league                      |
 
 Lifecycle notes:
@@ -105,6 +105,9 @@ Lifecycle notes:
 - `GET /tournaments/:id/standings` works for every tournament type and exposes the tie-break order used for ranking.
 - `POST /tournaments/:id/reset` deletes existing matches, clears the winner, and returns the tournament to `pending`.
 - `DELETE /tournaments/:id` and `POST /tournaments/:id/reset` reject in-progress tournaments.
+- League tournaments now generate a full round-robin fixture list on `POST /tournaments/:id/start` and automatically complete when the last scheduled fixture is reported.
+- League standings and winners are now decided by season results (`wins`, head-to-head group wins, then Sonneborn-Berger), not by manually ending the season based on current Elo.
+- `POST /tournaments/:id/matches` is no longer the normal league flow; once scheduled fixtures exist, ad hoc match creation is rejected.
 - Round robin winners are now persisted from computed standings using head-to-head group wins, and Swiss winners use standings tie-breaks (`wins`, `buchholz`, `sonneborn_berger`, direct head-to-head for two-way ties, then fewer byes).
 
 ## Bracket Visualization

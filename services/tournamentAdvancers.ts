@@ -90,6 +90,32 @@ async function advanceRoundRobin(tournament, options: any = {}) {
   }
 }
 
+async function advanceLeague(tournament, options: any = {}) {
+  try {
+    const { transaction } = options;
+    const matches = await Match.findAll({
+      where: {
+        tournamentId: tournament.id,
+      },
+      order: [['round', 'ASC'], ['id', 'ASC']],
+      transaction,
+    });
+
+    if (matches.length === 0) {
+      return;
+    }
+
+    const completedMatches = matches.filter((match) => match.winnerId !== null);
+
+    if (completedMatches.length === matches.length) {
+      const standings = getStandingsForTournament(tournament, tournament.participants, matches);
+      await completeTournament(tournament, standings.standings[0]?.participantId ?? null, options);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 async function advanceSwiss(tournament, options: any = {}) {
   try {
     const { transaction } = options;
@@ -131,5 +157,6 @@ async function advanceSwiss(tournament, options: any = {}) {
 module.exports = {
   advanceSingleElimination,
   advanceRoundRobin,
+  advanceLeague,
   advanceSwiss,
 };

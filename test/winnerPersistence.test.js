@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   advanceSingleElimination,
+  advanceLeague,
   advanceRoundRobin,
   advanceSwiss,
 } = require('../services/tournamentAdvancers');
@@ -161,7 +162,38 @@ test('swiss advancement persists the standings winner using computed tie-breaks 
   assert.equal(refreshedTournament.winnerId, participantA.id);
 });
 
-test('league endTournament should write the winning participant id, not the member id', async () => {
+test('league advancement persists the scheduled season winner from standings instead of current Elo order', async () => {
+  await models.sequelize.sync({ force: true });
+
+  const tournament = await models.Tournament.create({
+    name: `League Winner ${Date.now()}`,
+    type: 'league',
+    status: 'in_progress',
+  });
+
+  const participantA = await createParticipant(tournament, 'League A', { participantElo: 1400 });
+  const participantB = await createParticipant(tournament, 'League B', { participantElo: 2200 });
+  const participantC = await createParticipant(tournament, 'League C', { participantElo: 1200 });
+
+  await models.Match.bulkCreate([
+    { round: 1, player1Id: participantA.id, player2Id: participantB.id, winnerId: participantA.id, tournamentId: tournament.id },
+    { round: 2, player1Id: participantA.id, player2Id: participantC.id, winnerId: participantA.id, tournamentId: tournament.id },
+    { round: 3, player1Id: participantB.id, player2Id: participantC.id, winnerId: participantB.id, tournamentId: tournament.id },
+  ]);
+
+  const loadedTournament = await models.Tournament.findByPk(tournament.id, {
+    include: { model: models.Participant, as: 'participants', include: { model: models.Member, as: 'member' } },
+  });
+
+  await advanceLeague(loadedTournament);
+
+  const refreshedTournament = await models.Tournament.findByPk(tournament.id);
+
+  assert.equal(refreshedTournament.status, 'completed');
+  assert.equal(refreshedTournament.winnerId, participantA.id);
+});
+
+test('league endTournament requires all generated fixtures to be completed', async () => {
   const originalFindByPk = models.Tournament.findByPk;
   let recordedUpdate = null;
 
@@ -169,6 +201,12 @@ test('league endTournament should write the winning participant id, not the memb
     id: 77,
     type: 'league',
     status: 'in_progress',
+    matches: [
+      {
+        id: 1,
+        winnerId: null,
+      },
+    ],
     participants: [
       {
         id: 21,
@@ -205,11 +243,8 @@ test('league endTournament should write the winning participant id, not the memb
 
     await tournamentController.endTournament(req, res);
 
-    assert.equal(res.statusCode, 200);
-    assert.deepStrictEqual(recordedUpdate, {
-      status: 'completed',
-      winnerId: 21,
-    });
+    assert.equal(res.statusCode, 409);
+    assert.equal(recordedUpdate, null);
   } finally {
     models.Tournament.findByPk = originalFindByPk;
   }

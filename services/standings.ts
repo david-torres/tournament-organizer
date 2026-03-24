@@ -143,14 +143,6 @@ function sortSingleEliminationStandings(records) {
     || compareParticipantIds(leftRecord, rightRecord));
 }
 
-function sortLeagueStandings(records) {
-  return [...records].sort((leftRecord, rightRecord) =>
-    compareNumbersDesc(leftRecord.currentElo ?? 0, rightRecord.currentElo ?? 0)
-    || compareNumbersDesc(leftRecord.wins, rightRecord.wins)
-    || compareNumbersDesc(leftRecord.matchesPlayed, rightRecord.matchesPlayed)
-    || compareParticipantIds(leftRecord, rightRecord));
-}
-
 function sortRoundRobinStandings(records, matches) {
   const standings = [...records].sort((leftRecord, rightRecord) =>
     compareNumbersDesc(leftRecord.wins, rightRecord.wins)
@@ -232,7 +224,7 @@ function getTieBreakOrder(type) {
     single_elimination: ['wins', 'last_completed_round', 'participant_id'],
     round_robin: ['wins', 'head_to_head_group_wins', 'sonneborn_berger', 'participant_id'],
     swiss: ['wins', 'buchholz', 'sonneborn_berger', 'head_to_head_if_two_way_tie', 'fewer_byes', 'participant_id'],
-    league: ['elo', 'wins', 'matches_played', 'participant_id'],
+    league: ['wins', 'head_to_head_group_wins', 'sonneborn_berger', 'participant_id'],
   };
 
   return tieBreakOrderByType[type] || ['participant_id'];
@@ -247,7 +239,7 @@ function rankStandingsByType(tournament, standings, matches) {
     case 'swiss':
       return sortSwissStandings(standings, matches);
     case 'league':
-      return sortLeagueStandings(standings);
+      return sortRoundRobinStandings(standings, matches);
     default:
       return [...standings].sort(compareParticipantIds);
   }
