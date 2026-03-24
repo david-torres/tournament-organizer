@@ -107,7 +107,15 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
   }, {
-    freezeTableName: true
+    freezeTableName: true,
+    indexes: [
+      {
+        fields: ['tournamentId', 'player1Id', 'completedAt'],
+      },
+      {
+        fields: ['tournamentId', 'player2Id', 'completedAt'],
+      },
+    ],
   });
 
   Match.associate = models => {

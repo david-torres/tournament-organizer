@@ -462,3 +462,71 @@ test('getBracket caches repeated image renders for the same tournament state', a
     utils.generateBracketImage = originalGenerateBracketImage;
   }
 });
+
+test('decayElo batches last-match activity lookups instead of querying Match.findOne per participant', async () => {
+  const originalFindByPk = models.Tournament.findByPk;
+  const originalParticipantFindAll = models.Participant.findAll;
+  const originalMatchFindAll = models.Match.findAll;
+  const originalMatchFindOne = models.Match.findOne;
+
+  let findAllCalls = 0;
+
+  models.Tournament.findByPk = async () => ({
+    id: 22,
+    status: 'in_progress',
+  });
+
+  models.Participant.findAll = async () => ([
+    {
+      id: 1,
+      elo: 1200,
+      member: { id: 101, name: 'Decay One' },
+      async update(values) {
+        this.elo = values.elo;
+        return this;
+      },
+    },
+    {
+      id: 2,
+      elo: 1200,
+      member: { id: 102, name: 'Decay Two' },
+      async update(values) {
+        this.elo = values.elo;
+        return this;
+      },
+    },
+  ]);
+
+  models.Match.findAll = async ({ attributes }) => {
+    findAllCalls += 1;
+
+    if (attributes[0][0] === 'player1Id') {
+      return [{ participantId: 1, lastActiveAt: '2026-03-10T00:00:00.000Z' }];
+    }
+
+    return [{ participantId: 2, lastActiveAt: '2026-03-10T00:00:00.000Z' }];
+  };
+
+  models.Match.findOne = async () => {
+    throw new Error('decayElo should not fall back to Match.findOne');
+  };
+
+  try {
+    const req = {
+      params: { id: '22' },
+    };
+    const res = createRes();
+
+    await tournamentController.decayElo(req, res);
+
+    assert.equal(res.statusCode, null);
+    assert.equal(findAllCalls, 2);
+    assert.equal(res.body.participants.length, 2);
+    assert.ok(res.body.participants.every((participant) => participant.elo_decay.penalty > 0));
+  } finally {
+    models.Tournament.findByPk = originalFindByPk;
+    models.Participant.findAll = originalParticipantFindAll;
+    models.Match.findAll = originalMatchFindAll;
+    models.Match.findOne = originalMatchFindOne;
+  }
+});

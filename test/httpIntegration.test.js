@@ -82,6 +82,16 @@ async function getTournament(tournamentId) {
   return response.json();
 }
 
+async function decayTournamentElo(tournamentId) {
+  const response = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournamentId}/decay-elo`,
+  });
+
+  assert.equal(response.statusCode, 200);
+  return response.json();
+}
+
 async function getStandings(tournamentId) {
   const response = await inject(app, {
     method: 'GET',
@@ -571,6 +581,55 @@ test('league start generates a scheduled season and league completion is automat
   assert.equal(standings.tieBreakOrder[0], 'points');
   assert.equal(standings.standings[0].participantId, refreshedTournament.winnerId);
   assert.equal(standings.standings[0].isWinner, true);
+});
+
+test('POST /tournaments/:id/decay-elo decays only participants with completed league activity', async () => {
+  const tournament = await createTournament({
+    name: `HTTP League Decay ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`Decay One ${Date.now()}`),
+    createMember(`Decay Two ${Date.now()}`),
+    createMember(`Decay Three ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const playedMatch = pendingMatches[0];
+
+  const resultResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${playedMatch.id}`,
+    payload: { winner_id: playedMatch.player1.id },
+  });
+  assert.equal(resultResponse.statusCode, 200);
+
+  await models.Match.update(
+    {
+      completedAt: new Date('2026-03-10T00:00:00.000Z'),
+      updatedAt: new Date('2026-03-10T00:00:00.000Z'),
+    },
+    { where: { id: playedMatch.id }, silent: true },
+  );
+
+  const decayResponse = await decayTournamentElo(tournament.id);
+
+  assert.equal(decayResponse.participants.length, 2);
+
+  const decayedParticipantIds = decayResponse.participants
+    .map((participant) => participant.participant.id)
+    .sort((left, right) => left - right);
+  const playedParticipantIds = [playedMatch.player1.id, playedMatch.player2.id].sort((left, right) => left - right);
+
+  assert.deepStrictEqual(decayedParticipantIds, playedParticipantIds);
+  assert.ok(decayResponse.participants.every((participant) => participant.elo_decay.penalty > 0));
 });
 
 test('PATCH /tournaments/:id/matches/:match_id can update scheduling metadata before result entry', async () => {

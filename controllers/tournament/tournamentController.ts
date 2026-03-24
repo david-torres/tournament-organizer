@@ -100,6 +100,76 @@ function parseSeedValue(rawSeed) {
   return { provided: true, value: parsedSeed };
 }
 
+function getCompletedMatchFilter(tournamentId) {
+  return {
+    tournamentId,
+    [Op.or]: [
+      { completedAt: { [Op.ne]: null } },
+      { winnerId: { [Op.ne]: null } },
+    ],
+  };
+}
+
+function mergeLastActiveRows(lastActiveAtByParticipantId, rows) {
+  rows.forEach((row) => {
+    if (row.participantId == null || row.lastActiveAt == null) {
+      return;
+    }
+
+    const participantId = Number(row.participantId);
+    const lastActiveAt = new Date(row.lastActiveAt);
+    const existingLastActiveAt = lastActiveAtByParticipantId.get(participantId);
+
+    if (!existingLastActiveAt || lastActiveAt > existingLastActiveAt) {
+      lastActiveAtByParticipantId.set(participantId, lastActiveAt);
+    }
+  });
+}
+
+async function getLastActiveAtByParticipantId(tournamentId, participantIds) {
+  if (participantIds.length === 0) {
+    return new Map();
+  }
+
+  const lastActivityExpression = sequelize.fn(
+    'MAX',
+    sequelize.fn('COALESCE', sequelize.col('completedAt'), sequelize.col('updatedAt')),
+  );
+  const completedMatchFilter = getCompletedMatchFilter(tournamentId);
+
+  const [player1Rows, player2Rows] = await Promise.all([
+    Match.findAll({
+      attributes: [
+        ['player1Id', 'participantId'],
+        [lastActivityExpression, 'lastActiveAt'],
+      ],
+      where: {
+        ...completedMatchFilter,
+        player1Id: { [Op.in]: participantIds },
+      },
+      group: ['player1Id'],
+      raw: true,
+    }),
+    Match.findAll({
+      attributes: [
+        ['player2Id', 'participantId'],
+        [lastActivityExpression, 'lastActiveAt'],
+      ],
+      where: {
+        ...completedMatchFilter,
+        player2Id: { [Op.in]: participantIds },
+      },
+      group: ['player2Id'],
+      raw: true,
+    }),
+  ]);
+
+  const lastActiveAtByParticipantId = new Map();
+  mergeLastActiveRows(lastActiveAtByParticipantId, player1Rows);
+  mergeLastActiveRows(lastActiveAtByParticipantId, player2Rows);
+  return lastActiveAtByParticipantId;
+}
+
 async function findSeedConflict(tournamentId, seed, options: any = {}) {
   if (seed == null) {
     return null;
@@ -639,25 +709,20 @@ async function decayElo(req, res) {
       where: { tournamentId: tournament.id },
       include: { model: Member, as: 'member' },
     });
+    const participantIds = participants.map((participant) => participant.id);
+    const lastActiveAtByParticipantId = await getLastActiveAtByParticipantId(tournament.id, participantIds);
+    const currentDate = new Date();
 
     const updatedParticipants = [];
 
     for (const participant of participants) {
-      const lastMatch = await Match.findOne({
-        where: {
-          tournamentId: tournament.id,
-          [Op.or]: [{ player1Id: participant.id }, { player2Id: participant.id }],
-          winnerId: { [Op.ne]: null },
-        },
-        order: [['updatedAt', 'DESC']],
-      });
-
-      if (!lastMatch) {
+      const lastActiveAt = lastActiveAtByParticipantId.get(participant.id);
+      if (!lastActiveAt) {
         continue;
       }
 
       const oldElo = participant.elo;
-      const updatedParticipant = applyDecay(participant, lastMatch.updatedAt, new Date());
+      const updatedParticipant = applyDecay(participant, lastActiveAt, currentDate);
       await participant.update({ elo: updatedParticipant.elo });
 
       updatedParticipants.push({
@@ -697,4 +762,5 @@ module.exports = {
   endTournament,
   getLatestTournament,
   decayElo,
+  getLastActiveAtByParticipantId,
 };
