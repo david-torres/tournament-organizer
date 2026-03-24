@@ -4,6 +4,7 @@ const { Op, TimeoutError, UniqueConstraintError } = require('sequelize');
 const { loadSourceModule } = require('../../runtime/loadSourceModule');
 const { Tournament, Participant, Match, Member, sequelize } = loadSourceModule('models');
 const { isPowerOfTwo, decayElo: applyDecay } = require('../../utils');
+const { getStandingsForTournament } = require('../../services/standings');
 const {
   generateSingleEliminationMatches,
   generateRoundRobinMatches,
@@ -165,6 +166,25 @@ async function getParticipants(req, res) {
     }
 
     res.json(tournament.participants);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+async function getStandings(req, res) {
+  try {
+    const tournament = await Tournament.findByPk(req.params.id, {
+      include: [
+        { model: Participant, as: 'participants', include: { model: Member, as: 'member' } },
+        { model: Match, as: 'matches' },
+      ],
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    res.json(getStandingsForTournament(tournament, tournament.participants, tournament.matches));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -503,6 +523,7 @@ module.exports = {
   deleteTournament,
   addParticipant,
   getParticipants,
+  getStandings,
   startTournament,
   endTournament,
   getLatestTournament,

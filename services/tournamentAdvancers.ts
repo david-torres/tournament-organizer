@@ -3,6 +3,7 @@ export {};
 const { loadSourceModule } = require('../runtime/loadSourceModule');
 const { Match } = loadSourceModule('models');
 const { generateSwissMatches } = require('./matchGenerators');
+const { getStandingsForTournament } = require('./standings');
 
 async function completeTournament(tournament, winnerParticipantId, options: any = {}) {
   await tournament.update({
@@ -80,7 +81,8 @@ async function advanceRoundRobin(tournament, options: any = {}) {
 
       if (latestRound === totalRounds) {
         console.log('All rounds complete. Tournament finished.');
-        await tournament.update({ status: 'completed' }, { transaction });
+        const standings = getStandingsForTournament(tournament, tournament.participants, matches);
+        await completeTournament(tournament, standings.standings[0]?.participantId ?? null, options);
       }
     }
   } catch (error) {
@@ -106,13 +108,8 @@ async function advanceSwiss(tournament, options: any = {}) {
       const maxRounds = Math.ceil(Math.log2(participants.length)) + 1;
 
       if (latestRound >= maxRounds) {
-        const playerScores = participants.map((participant) => ({
-          participant,
-          wins: matches.filter((match) => match.winnerId === participant.id).length,
-        }));
-
-        playerScores.sort((a, b) => b.wins - a.wins || b.participant.elo - a.participant.elo);
-        await completeTournament(tournament, playerScores[0].participant.id, options);
+        const standings = getStandingsForTournament(tournament, participants, matches);
+        await completeTournament(tournament, standings.standings[0]?.participantId ?? null, options);
         return;
       }
 

@@ -87,6 +87,7 @@ The API server will be running at `http://localhost:3000` (or the port specified
 | POST   | /tournaments/:id/reset                 | Reset a non-active tournament back to pending      |
 | DELETE | /tournaments/:id                       | Delete a non-active tournament                     |
 | GET    | /tournaments/:id/participants          | Get a list of tournament participants              |
+| GET    | /tournaments/:id/standings             | Get computed standings and tie-break metadata      |
 | POST   | /tournaments/:id/participants          | Add a member to a pending tournament               |
 | POST   | /tournaments/:id/start                 | Generate matches to start a tournament             |
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
@@ -101,8 +102,10 @@ Lifecycle notes:
 
 - `PATCH /tournaments/:id` supports `name`, `size` for pending single-elimination tournaments, and `status: "archived"` for non-active tournaments.
 - `GET /tournaments/latest` skips archived tournaments.
+- `GET /tournaments/:id/standings` works for every tournament type and exposes the tie-break order used for ranking.
 - `POST /tournaments/:id/reset` deletes existing matches, clears the winner, and returns the tournament to `pending`.
 - `DELETE /tournaments/:id` and `POST /tournaments/:id/reset` reject in-progress tournaments.
+- Round robin winners are now persisted from computed standings using head-to-head group wins, and Swiss winners use standings tie-breaks (`wins`, `buchholz`, `sonneborn_berger`, direct head-to-head for two-way ties, then fewer byes).
 
 ## Bracket Visualization
 

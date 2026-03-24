@@ -359,6 +359,75 @@ paths:
                     tournamentId:
                       type: integer
 
+  /tournaments/{id}/standings:
+    get:
+      summary: Get computed standings for a tournament
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Tournament standings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tournamentId:
+                    type: integer
+                  type:
+                    type: string
+                  status:
+                    type: string
+                  tieBreakOrder:
+                    type: array
+                    items:
+                      type: string
+                  standings:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        rank:
+                          type: integer
+                        participantId:
+                          type: integer
+                        memberId:
+                          type: integer
+                          nullable: true
+                        memberName:
+                          type: string
+                          nullable: true
+                        wins:
+                          type: integer
+                        losses:
+                          type: integer
+                        byes:
+                          type: integer
+                        matchesPlayed:
+                          type: integer
+                        points:
+                          type: integer
+                        buchholz:
+                          type: integer
+                        sonnebornBerger:
+                          type: integer
+                        miniLeagueWins:
+                          type: integer
+                        lastCompletedRound:
+                          type: integer
+                        currentElo:
+                          type: number
+                          format: float
+                          nullable: true
+                        isWinner:
+                          type: boolean
+        '404':
+          description: Tournament not found
+
   /tournaments/{id}/start:
     post:
       summary: Generate matches to start a tournament

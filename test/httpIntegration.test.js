@@ -71,6 +71,16 @@ async function getTournament(tournamentId) {
   return response.json();
 }
 
+async function getStandings(tournamentId) {
+  const response = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournamentId}/standings`,
+  });
+
+  assert.equal(response.statusCode, 200);
+  return response.json();
+}
+
 async function listTournaments(params = {}) {
   const searchParams = new URLSearchParams(params).toString();
   const suffix = searchParams ? `?${searchParams}` : '';
@@ -108,6 +118,37 @@ test('GET /tournaments lists tournaments and GET /tournaments/:id returns a sing
   assert.equal(detail.id, firstTournament.id);
   assert.equal(detail.name, firstTournament.name);
   assert.equal(detail.status, 'pending');
+});
+
+test('GET /tournaments/:id/standings exposes standings metadata for every tournament type', async () => {
+  const tournamentFixtures = [
+    { type: 'single_elimination', size: 2 },
+    { type: 'round_robin', size: 2 },
+    { type: 'swiss', size: 2 },
+    { type: 'league' },
+  ];
+
+  for (const fixture of tournamentFixtures) {
+    const tournament = await createTournament({
+      name: `HTTP Standings ${fixture.type} ${Date.now()}`,
+      ...fixture,
+    });
+    const memberOne = await createMember(`Standings ${fixture.type} One ${Date.now()}`);
+    const memberTwo = await createMember(`Standings ${fixture.type} Two ${Date.now()}`);
+
+    await addParticipant(tournament.id, memberOne.id);
+    await addParticipant(tournament.id, memberTwo.id);
+
+    const standings = await getStandings(tournament.id);
+
+    assert.equal(standings.tournamentId, tournament.id);
+    assert.equal(standings.type, fixture.type);
+    assert.equal(standings.status, 'pending');
+    assert.equal(standings.standings.length, 2);
+    assert.ok(Array.isArray(standings.tieBreakOrder));
+    assert.equal(standings.standings[0].rank, 1);
+    assert.equal(standings.standings[1].rank, 2);
+  }
 });
 
 test('PATCH /tournaments/:id updates pending tournament metadata', async () => {
