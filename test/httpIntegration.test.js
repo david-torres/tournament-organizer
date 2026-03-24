@@ -568,9 +568,207 @@ test('league start generates a scheduled season and league completion is automat
 
   const standings = await getStandings(tournament.id);
   assert.equal(standings.status, 'completed');
-  assert.equal(standings.tieBreakOrder[0], 'wins');
+  assert.equal(standings.tieBreakOrder[0], 'points');
   assert.equal(standings.standings[0].participantId, refreshedTournament.winnerId);
   assert.equal(standings.standings[0].isWinner, true);
+});
+
+test('PATCH /tournaments/:id/matches/:match_id can update scheduling metadata before result entry', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Match Scheduling ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`Schedule One ${Date.now()}`),
+    createMember(`Schedule Two ${Date.now()}`),
+    createMember(`Schedule Three ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const match = pendingMatches[0];
+
+  const response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${match.id}`,
+    payload: {
+      scheduled_at: '2026-04-01T18:30:00.000Z',
+      location: 'Center Court',
+      notes: 'Streamed feature match',
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+
+  const updatedMatch = response.json();
+  assert.equal(updatedMatch.scheduledAt, '2026-04-01T18:30:00.000Z');
+  assert.equal(updatedMatch.location, 'Center Court');
+  assert.equal(updatedMatch.notes, 'Streamed feature match');
+  assert.equal(updatedMatch.winnerId, null);
+});
+
+test('PATCH /tournaments/:id/matches/:match_id can record a drawn result with scores', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Match Draw ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`Draw One ${Date.now()}`),
+    createMember(`Draw Two ${Date.now()}`),
+    createMember(`Draw Three ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const match = pendingMatches[0];
+
+  const response = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${match.id}`,
+    payload: {
+      is_draw: true,
+      player1_score: 2,
+      player2_score: 2,
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+
+  const updatedMatch = response.json();
+  assert.equal(updatedMatch.resultType, 'draw');
+  assert.equal(updatedMatch.winner, null);
+  assert.equal(updatedMatch.player1Score, 2);
+  assert.equal(updatedMatch.player2Score, 2);
+  assert.notEqual(updatedMatch.completedAt, null);
+
+  const completedMatches = await getMatches(tournament.id, { status: 'completed' });
+  assert.ok(completedMatches.some((completedMatch) => completedMatch.id === match.id));
+});
+
+test('POST /tournaments/:id/matches/:match_id/correct safely corrects a completed league result', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Match Correction ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`Correct One ${Date.now()}`),
+    createMember(`Correct Two ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const match = pendingMatches[0];
+
+  const initialResultResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${match.id}`,
+    payload: {
+      winner_id: match.player1.id,
+      player1_score: 2,
+      player2_score: 0,
+    },
+  });
+  assert.equal(initialResultResponse.statusCode, 200);
+
+  const correctionResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches/${match.id}/correct`,
+    payload: {
+      winner_id: match.player2.id,
+      player1_score: 1,
+      player2_score: 2,
+      correction_reason: 'Scorekeeper entered the wrong winner',
+    },
+  });
+
+  assert.equal(correctionResponse.statusCode, 200);
+
+  const correctedMatch = correctionResponse.json();
+  assert.equal(correctedMatch.winner.id, match.player2.id);
+  assert.equal(correctedMatch.correctionCount, 1);
+  assert.equal(correctedMatch.correctionReason, 'Scorekeeper entered the wrong winner');
+
+  const refreshedTournament = await models.Tournament.findByPk(tournament.id);
+  assert.equal(refreshedTournament.winnerId, match.player2.id);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsResponse.statusCode, 200);
+
+  const participants = participantsResponse.json();
+  const correctedWinner = participants.find((participant) => participant.id === match.player2.id);
+  const correctedLoser = participants.find((participant) => participant.id === match.player1.id);
+  assert.ok(correctedWinner.elo > correctedLoser.elo);
+});
+
+test('POST /tournaments/:id/matches/:match_id/correct rejects league corrections once later related matches are completed', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Unsafe Correction ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`Unsafe One ${Date.now()}`),
+    createMember(`Unsafe Two ${Date.now()}`),
+    createMember(`Unsafe Three ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const pendingMatches = await getMatches(tournament.id, { status: 'pending' });
+  const firstMatch = pendingMatches[0];
+  const laterRelatedMatch = pendingMatches.find((candidate) =>
+    candidate.id !== firstMatch.id
+    && [candidate.player1.id, candidate.player2.id].some((participantId) =>
+      [firstMatch.player1.id, firstMatch.player2.id].includes(participantId)),
+  );
+
+  const firstResultResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${firstMatch.id}`,
+    payload: { winner_id: firstMatch.player1.id },
+  });
+  assert.equal(firstResultResponse.statusCode, 200);
+
+  const laterResultResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${laterRelatedMatch.id}`,
+    payload: { winner_id: laterRelatedMatch.player1.id },
+  });
+  assert.equal(laterResultResponse.statusCode, 200);
+
+  const correctionResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches/${firstMatch.id}/correct`,
+    payload: { winner_id: firstMatch.player2.id },
+  });
+
+  assert.equal(correctionResponse.statusCode, 409);
+  assert.match(correctionResponse.json().error, /later completed matches/i);
 });
 
 test('GET /tournaments/:id/bracket?format=json returns bye matches for swiss tournaments', async () => {

@@ -33,6 +33,71 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id',
       },
     },
+    player1Score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    player2Score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    scheduledAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    completedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    resultType: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    forfeitByParticipantId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'Participant',
+        key: 'id',
+      },
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    player1EloBefore: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    player2EloBefore: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    player1EloAfter: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    player2EloAfter: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    correctionCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    correctedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    correctionReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     tournamentId: {
       type: DataTypes.INTEGER,
       allowNull: false,

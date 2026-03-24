@@ -48,11 +48,15 @@ function getParticipantListOrder() {
 }
 
 function getTournamentMatchesPayload(tournament, matches) {
+  const generatedAt = new Date();
+
   return matches.map((match) => ({
     round: match.round,
     player1Id: match.player1Id ?? null,
     player2Id: match.player2Id ?? null,
     winnerId: match.player2Id === null ? match.player1Id : match.winnerId ?? null,
+    resultType: match.player2Id === null ? 'bye' : null,
+    completedAt: match.player2Id === null ? generatedAt : null,
     tournamentId: tournament.id,
   }));
 }

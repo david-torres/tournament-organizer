@@ -1,5 +1,7 @@
 export {};
 
+const { isMatchCompleted, isMatchDraw } = require('./matchState');
+
 function normalizeParticipant(participant) {
   if (participant && typeof participant.get === 'function') {
     return participant.get({ plain: true });
@@ -19,7 +21,7 @@ function normalizeMatch(match) {
 function getCompletedMatches(matches) {
   return matches
     .map(normalizeMatch)
-    .filter((match) => match.winnerId !== null && match.winnerId !== undefined);
+    .filter((match) => isMatchCompleted(match));
 }
 
 function getParticipantMatches(matches, participantId) {
@@ -38,23 +40,38 @@ function getOpponentId(match, participantId) {
   return null;
 }
 
-function buildTieGroupWins(group, matches) {
+function getMatchPointsForParticipant(match, participantId) {
+  if (match.winnerId === participantId) {
+    return 1;
+  }
+
+  if (isMatchDraw(match)) {
+    return 0.5;
+  }
+
+  return 0;
+}
+
+function buildTieGroupPoints(group, matches) {
   const groupIds = new Set(group.map((record) => record.participantId));
-  const winsByParticipantId = new Map<number, number>(group.map((record) => [record.participantId, 0]));
+  const pointsByParticipantId = new Map<number, number>(group.map((record) => [record.participantId, 0]));
 
   matches.forEach((match) => {
     if (!groupIds.has(match.player1Id) || !groupIds.has(match.player2Id)) {
       return;
     }
 
-    if (!winsByParticipantId.has(match.winnerId)) {
-      return;
-    }
-
-    winsByParticipantId.set(match.winnerId, (winsByParticipantId.get(match.winnerId) || 0) + 1);
+    [match.player1Id, match.player2Id].forEach((participantId) => {
+      if (pointsByParticipantId.has(participantId)) {
+        pointsByParticipantId.set(
+          participantId,
+          (pointsByParticipantId.get(participantId) || 0) + getMatchPointsForParticipant(match, participantId),
+        );
+      }
+    });
   });
 
-  return winsByParticipantId;
+  return pointsByParticipantId;
 }
 
 function getHeadToHeadResult(leftRecord, rightRecord, matches) {
@@ -94,6 +111,14 @@ function buildBaseStandings(tournament, participants, matches) {
   const normalizedParticipants = participants.map(normalizeParticipant);
   const completedMatches = getCompletedMatches(matches);
 
+  const pointsByParticipantId = new Map<number, number>(
+    normalizedParticipants.map((participant) => [
+      participant.id,
+      completedMatches
+        .filter((match) => match.player1Id === participant.id || match.player2Id === participant.id)
+        .reduce((total, match) => total + getMatchPointsForParticipant(match, participant.id), 0),
+    ]),
+  );
   const winsByParticipantId = new Map<number, number>(
     normalizedParticipants.map((participant) => [
       participant.id,
@@ -107,11 +132,16 @@ function buildBaseStandings(tournament, participants, matches) {
       .filter((match) => match.winnerId === participant.id)
       .map((match) => getOpponentId(match, participant.id))
       .filter((opponentId) => opponentId !== null);
+    const drawnOpponents = participantMatches
+      .filter((match) => isMatchDraw(match))
+      .map((match) => getOpponentId(match, participant.id))
+      .filter((opponentId) => opponentId !== null);
     const opponentIds = participantMatches
       .map((match) => getOpponentId(match, participant.id))
       .filter((opponentId) => opponentId !== null);
     const wins = winsByParticipantId.get(participant.id) || 0;
-    const losses = participantMatches.filter((match) => match.winnerId !== participant.id && getOpponentId(match, participant.id) !== null).length;
+    const draws = participantMatches.filter((match) => isMatchDraw(match)).length;
+    const losses = participantMatches.filter((match) => match.winnerId !== participant.id && !isMatchDraw(match) && getOpponentId(match, participant.id) !== null).length;
     const byes = participantMatches.filter((match) => match.player2Id === null && match.winnerId === participant.id).length;
     const member = participant.member || null;
 
@@ -120,13 +150,16 @@ function buildBaseStandings(tournament, participants, matches) {
       memberId: member?.id ?? participant.memberId ?? null,
       memberName: member?.name ?? null,
       wins,
+      draws,
       losses,
       byes,
       matchesPlayed: participantMatches.length,
-      points: wins,
-      buchholz: opponentIds.reduce((total, opponentId) => total + (winsByParticipantId.get(opponentId) || 0), 0),
-      sonnebornBerger: defeatedOpponents.reduce((total, opponentId) => total + (winsByParticipantId.get(opponentId) || 0), 0),
-      miniLeagueWins: 0,
+      points: pointsByParticipantId.get(participant.id) || 0,
+      buchholz: opponentIds.reduce((total, opponentId) => total + (pointsByParticipantId.get(opponentId) || 0), 0),
+      sonnebornBerger:
+        defeatedOpponents.reduce((total, opponentId) => total + (pointsByParticipantId.get(opponentId) || 0), 0)
+        + drawnOpponents.reduce((total, opponentId) => total + ((pointsByParticipantId.get(opponentId) || 0) / 2), 0),
+      miniLeaguePoints: 0,
       lastCompletedRound: participantMatches.reduce((latestRound, match) => Math.max(latestRound, match.round || 0), 0),
       currentElo: tournament.type === 'league'
         ? participant.elo ?? null
@@ -145,27 +178,27 @@ function sortSingleEliminationStandings(records) {
 
 function sortRoundRobinStandings(records, matches) {
   const standings = [...records].sort((leftRecord, rightRecord) =>
-    compareNumbersDesc(leftRecord.wins, rightRecord.wins)
+    compareNumbersDesc(leftRecord.points, rightRecord.points)
     || compareParticipantIds(leftRecord, rightRecord));
 
   let currentIndex = 0;
   while (currentIndex < standings.length) {
-    const currentWins = standings[currentIndex].wins;
+    const currentPoints = standings[currentIndex].points;
     const group = [];
 
-    while (currentIndex < standings.length && standings[currentIndex].wins === currentWins) {
+    while (currentIndex < standings.length && standings[currentIndex].points === currentPoints) {
       group.push(standings[currentIndex]);
       currentIndex += 1;
     }
 
-    const miniLeagueWinsByParticipantId = buildTieGroupWins(group, matches);
+    const miniLeaguePointsByParticipantId = buildTieGroupPoints(group, matches);
     const sortedGroup = group
       .map((record) => ({
         ...record,
-        miniLeagueWins: miniLeagueWinsByParticipantId.get(record.participantId) || 0,
+        miniLeaguePoints: miniLeaguePointsByParticipantId.get(record.participantId) || 0,
       }))
       .sort((leftRecord, rightRecord) =>
-        compareNumbersDesc(leftRecord.miniLeagueWins, rightRecord.miniLeagueWins)
+        compareNumbersDesc(leftRecord.miniLeaguePoints, rightRecord.miniLeaguePoints)
         || compareNumbersDesc(leftRecord.sonnebornBerger, rightRecord.sonnebornBerger)
         || compareParticipantIds(leftRecord, rightRecord));
 
@@ -222,9 +255,9 @@ function sortSwissStandings(records, matches) {
 function getTieBreakOrder(type) {
   const tieBreakOrderByType = {
     single_elimination: ['wins', 'last_completed_round', 'participant_id'],
-    round_robin: ['wins', 'head_to_head_group_wins', 'sonneborn_berger', 'participant_id'],
+    round_robin: ['points', 'head_to_head_group_points', 'sonneborn_berger', 'participant_id'],
     swiss: ['wins', 'buchholz', 'sonneborn_berger', 'head_to_head_if_two_way_tie', 'fewer_byes', 'participant_id'],
-    league: ['wins', 'head_to_head_group_wins', 'sonneborn_berger', 'participant_id'],
+    league: ['points', 'head_to_head_group_points', 'sonneborn_berger', 'participant_id'],
   };
 
   return tieBreakOrderByType[type] || ['participant_id'];

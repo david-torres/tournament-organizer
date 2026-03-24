@@ -653,6 +653,13 @@ paths:
                   type: integer
                 participant2:
                   type: integer
+                scheduled_at:
+                  type: string
+                  format: date-time
+                location:
+                  type: string
+                notes:
+                  type: string
       responses:
         '201':
           description: Match created
@@ -684,7 +691,7 @@ paths:
 
   /tournaments/{id}/matches/{match_id}:
     patch:
-      summary: Update a match (set the winner)
+      summary: Update match scheduling metadata or record a result
       parameters:
         - in: path
           name: id
@@ -703,11 +710,27 @@ paths:
             schema:
               type: object
               required:
-                - winner_id
               properties:
                 winner_id:
                   type: integer
                   description: Winning participant id for the match
+                is_draw:
+                  type: boolean
+                  description: Marks the result as a draw for round-robin or league matches
+                forfeit_by_participant_id:
+                  type: integer
+                  description: Participant id that forfeited the match
+                player1_score:
+                  type: integer
+                player2_score:
+                  type: integer
+                scheduled_at:
+                  type: string
+                  format: date-time
+                location:
+                  type: string
+                notes:
+                  type: string
       responses:
         '200':
           description: Match result updated
@@ -729,11 +752,54 @@ paths:
                   winnerId:
                     type: integer
         '400':
-          description: Winner must be one of the match participants
+          description: Invalid scheduling update or result payload
         '404':
           description: Tournament or match not found
+        '409':
+          description: Match has already been completed
         '500':
           description: Server error
+
+  /tournaments/{id}/matches/{match_id}/correct:
+    post:
+      summary: Safely correct a completed league match result
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+        - in: path
+          name: match_id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                winner_id:
+                  type: integer
+                is_draw:
+                  type: boolean
+                forfeit_by_participant_id:
+                  type: integer
+                player1_score:
+                  type: integer
+                player2_score:
+                  type: integer
+                correction_reason:
+                  type: string
+      responses:
+        '200':
+          description: Match result corrected
+        '404':
+          description: Tournament or match not found
+        '409':
+          description: Correction is unsafe or unsupported for this match
 
   /tournaments/{id}/bracket:
     get:

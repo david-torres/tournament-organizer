@@ -4,6 +4,7 @@ const { loadSourceModule } = require('../runtime/loadSourceModule');
 const { Match } = loadSourceModule('models');
 const { generateSwissMatches } = require('./matchGenerators');
 const { getStandingsForTournament } = require('./standings');
+const { isMatchCompleted } = require('./matchState');
 
 async function completeTournament(tournament, winnerParticipantId, options: any = {}) {
   await tournament.update({
@@ -25,7 +26,7 @@ async function advanceSingleElimination(tournament, options: any = {}) {
 
     const latestRound = matches[matches.length - 1].round;
     const currentRoundMatches = matches.filter((match) => match.round === latestRound);
-    const completedMatches = currentRoundMatches.filter((match) => match.winnerId !== null);
+    const completedMatches = currentRoundMatches.filter((match) => isMatchCompleted(match));
 
     if (completedMatches.length === currentRoundMatches.length) {
       console.log(`All matches completed for round #${latestRound}. Advancing round.`);
@@ -74,7 +75,7 @@ async function advanceRoundRobin(tournament, options: any = {}) {
         ? tournament.participants.length - 1
         : tournament.participants.length;
 
-    const completedMatches = matches.filter((match) => match.winnerId !== null);
+    const completedMatches = matches.filter((match) => isMatchCompleted(match));
 
     if (completedMatches.length === matches.length) {
       console.log(`All matches completed for round #${latestRound}.`);
@@ -105,7 +106,7 @@ async function advanceLeague(tournament, options: any = {}) {
       return;
     }
 
-    const completedMatches = matches.filter((match) => match.winnerId !== null);
+    const completedMatches = matches.filter((match) => isMatchCompleted(match));
 
     if (completedMatches.length === matches.length) {
       const standings = getStandingsForTournament(tournament, tournament.participants, matches);
@@ -128,7 +129,7 @@ async function advanceSwiss(tournament, options: any = {}) {
     const participants = tournament.participants;
     const latestRound = matches.length > 0 ? matches[0].round : 0;
     const currentRoundMatches = matches.filter((match) => match.round === latestRound);
-    const completedMatches = currentRoundMatches.filter((match) => match.winnerId !== null);
+    const completedMatches = currentRoundMatches.filter((match) => isMatchCompleted(match));
 
     if (completedMatches.length === currentRoundMatches.length) {
       const maxRounds = Math.ceil(Math.log2(participants.length)) + 1;
@@ -140,10 +141,13 @@ async function advanceSwiss(tournament, options: any = {}) {
       }
 
       const newMatches = generateSwissMatches(participants, matches);
+      const generatedAt = new Date();
       await Match.bulkCreate(
         newMatches.map((match) => ({
           ...match,
           winnerId: match.player2Id === null ? match.player1Id : match.winnerId ?? null,
+          resultType: match.player2Id === null ? 'bye' : null,
+          completedAt: match.player2Id === null ? generatedAt : null,
           tournamentId: tournament.id,
         })),
         { transaction },
