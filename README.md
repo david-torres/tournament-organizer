@@ -152,6 +152,10 @@ Single Elimination:
 
     npm run sim-single-elim
 
+Double Elimination:
+
+    npm run sim-double-elim
+
 Round Robin:
 
     npm run sim-round-robin
@@ -163,6 +167,14 @@ Swiss:
 League:
 
     npm run sim-league
+
+Ladder:
+
+    npm run sim-ladder
+
+Run every supported simulation:
+
+    npm run sim-all
 
 ## AI Disclosure
 

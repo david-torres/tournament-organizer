@@ -9,9 +9,12 @@
     "test": "npm run build && NODE_ENV=test node --test --test-concurrency=1",
     "init-db": "npm run build && node init_db.js",
     "sim-single-elim": "npm run build && node simulate-tournament.js single_elimination",
+    "sim-double-elim": "npm run build && node simulate-tournament.js double_elimination",
     "sim-round-robin": "npm run build && node simulate-tournament.js round_robin",
     "sim-swiss": "npm run build && node simulate-tournament.js swiss",
-    "sim-league": "npm run build && node simulate-league.js"
+    "sim-league": "npm run build && node simulate-league.js",
+    "sim-ladder": "npm run build && node simulate-tournament.js ladder",
+    "sim-all": "npm run build && node simulate-all.js"
   },
   "dependencies": {
     "@faker-js/faker": "^7.6.0",
