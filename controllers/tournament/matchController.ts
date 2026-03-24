@@ -19,8 +19,10 @@ const MATCH_INCLUDES = [
   { model: Participant, as: 'player2', include: { model: Member, as: 'member' } },
   { model: Participant, as: 'winner', include: { model: Member, as: 'member' } },
 ];
-const DRAW_ALLOWED_TOURNAMENT_TYPES = new Set(['round_robin', 'league']);
-const LEAGUE_TOURNAMENT_TYPE = 'league';
+const DRAW_ALLOWED_TOURNAMENT_TYPES = new Set(['round_robin', 'league', 'ladder']);
+const PARTICIPANT_ELO_TOURNAMENT_TYPES = new Set(['league', 'ladder']);
+const MANUAL_MATCH_TOURNAMENT_TYPES = new Set(['league', 'ladder']);
+const SAFE_CORRECTION_TOURNAMENT_TYPES = new Set(['league', 'ladder']);
 
 function isSqliteBusyError(error) {
   return error?.parent?.code === 'SQLITE_BUSY' || error?.original?.code === 'SQLITE_BUSY' || error?.message?.includes('SQLITE_BUSY');
@@ -110,7 +112,7 @@ function hasResultUpdates(body) {
 }
 
 function getEloTargets(tournamentType, participant1, participant2) {
-  if (tournamentType === LEAGUE_TOURNAMENT_TYPE) {
+  if (PARTICIPANT_ELO_TOURNAMENT_TYPES.has(tournamentType)) {
     return [participant1, participant2];
   }
 
@@ -131,7 +133,7 @@ async function applyMatchOutcome(tournament, match, participant1, participant2, 
   const eligibleWinnerIds = getEligibleWinnerIds(participant1, participant2);
 
   if (isDraw && !DRAW_ALLOWED_TOURNAMENT_TYPES.has(tournament.type)) {
-    return { status: 400, body: { error: 'Draw results are only supported for round robin and league tournaments' } };
+    return { status: 400, body: { error: 'Draw results are only supported for round robin, league, and ladder tournaments' } };
   }
 
   if (isDraw && (winnerId !== undefined || forfeitByParticipantId !== undefined)) {
@@ -192,7 +194,12 @@ async function applyMatchOutcome(tournament, match, participant1, participant2, 
     updates.player2EloBefore = eloTarget2.elo;
 
     if (winnerParticipant) {
-      await updateElo(eloTarget1, eloTarget2, tournament.type === LEAGUE_TOURNAMENT_TYPE ? winnerParticipant.id : winnerParticipant.member.id, options);
+      await updateElo(
+        eloTarget1,
+        eloTarget2,
+        PARTICIPANT_ELO_TOURNAMENT_TYPES.has(tournament.type) ? winnerParticipant.id : winnerParticipant.member.id,
+        options,
+      );
     }
 
     updates.player1EloAfter = eloTarget1.elo;
@@ -218,7 +225,7 @@ async function restoreMatchElo(tournament, match, participant1, participant2, op
   await eloTarget2.update({ elo: match.player2EloBefore }, options);
 }
 
-async function canCorrectLeagueMatch(match, transaction) {
+async function canCorrectRankedMatch(match, transaction) {
   if (!match.completedAt) {
     return false;
   }
@@ -263,15 +270,18 @@ async function createMatch(req, res) {
         return { status: 404, body: { error: 'Tournament not found' } };
       }
 
-      if (tournament.type !== 'league') {
-        return { status: 400, body: { error: 'Manual match creation is only supported for league tournaments' } };
+      if (!MANUAL_MATCH_TOURNAMENT_TYPES.has(tournament.type)) {
+        return { status: 400, body: { error: 'Manual match creation is only supported for league and ladder tournaments' } };
       }
 
       if (tournament.status !== 'in_progress') {
         return { status: 404, body: { error: 'Tournament not yet started' } };
       }
 
-      if (await Match.count({ where: { tournamentId }, transaction, lock: transaction.LOCK.UPDATE }) > 0) {
+      if (
+        tournament.type === 'league'
+        && await Match.count({ where: { tournamentId }, transaction, lock: transaction.LOCK.UPDATE }) > 0
+      ) {
         return { status: 409, body: { error: 'League fixtures are generated automatically when the tournament starts' } };
       }
 
@@ -446,8 +456,8 @@ async function correctMatchResult(req, res) {
         return { status: 404, body: { error: 'Tournament not found' } };
       }
 
-      if (tournament.type !== LEAGUE_TOURNAMENT_TYPE) {
-        return { status: 409, body: { error: 'Safe result correction is only supported for league matches' } };
+      if (!SAFE_CORRECTION_TOURNAMENT_TYPES.has(tournament.type)) {
+        return { status: 409, body: { error: 'Safe result correction is only supported for league and ladder matches' } };
       }
 
       const match = await Match.findOne({
@@ -468,7 +478,7 @@ async function correctMatchResult(req, res) {
         return { status: 409, body: { error: 'Only completed non-bye matches can be corrected' } };
       }
 
-      if (!(await canCorrectLeagueMatch(match, transaction))) {
+      if (!(await canCorrectRankedMatch(match, transaction))) {
         return { status: 409, body: { error: 'Cannot correct a match after later completed matches involve the same participants' } };
       }
 
@@ -489,7 +499,9 @@ async function correctMatchResult(req, res) {
         correctionReason: req.body.correction_reason ?? match.correctionReason ?? null,
       }, { transaction });
 
-      await advanceLeague(tournament, { transaction });
+      if (tournament.type === 'league') {
+        await advanceLeague(tournament, { transaction });
+      }
 
       const refreshedMatch = await Match.findByPk(match.id, {
         include: MATCH_INCLUDES,

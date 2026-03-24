@@ -8,13 +8,15 @@ A REST API for creating and managing tournaments, participants, and matches, wit
 - Round robin
 - Swiss
 - League
+- Ladder
 
 ## Features
 
 - Generate seeded or organizer-controlled matches, including standard single-elimination and double-elimination brackets
-- Store operational match details including scores, scheduling metadata, and controlled result correction for league play
+- Store operational match details including scores, scheduling metadata, and controlled result correction for league and ladder play
 - Track member Elo scores across matches and tournaments
 - Leagues for regularly starting with a fresh Elo score and configurable Elo decay after a period of non-participation
+- Ladders for ongoing ad hoc challenge matches ranked by participant Elo
 - Generate a bracket graphic for visualizing the tournament
 
 ## Getting Started
@@ -95,12 +97,12 @@ The API server will be running at `http://localhost:3000` (or the port specified
 | POST   | /tournaments/:id/start                 | Start a tournament and generate its initial matches or season fixtures |
 | GET    | /tournaments/:id/matches               | Get the list of matches for a tournament           |
 | GET    | /tournaments/:id/matches?status=STATUS | Get matches filtered by status (pending/completed)  |
-| POST   | /tournaments/:id/matches               | Create a manual match when no scheduled league fixtures exist |
+| POST   | /tournaments/:id/matches               | Create a manual ladder match, or a league match only when no scheduled fixtures exist |
 | PATCH  | /tournaments/:id/matches/:match_id     | Update match scheduling data or record a result    |
-| POST   | /tournaments/:id/matches/:match_id/correct | Safely correct a completed league result        |
+| POST   | /tournaments/:id/matches/:match_id/correct | Safely correct a completed league or ladder result |
 | GET    | /tournaments/:id/bracket               | Get the bracket data for a tournament              |
 | POST   | /tournaments/:id/league                | Compatibility endpoint to finalize a fully played league season |
-| POST   | /tournaments/:id/decay-elo             | Decay Elo scores for a league                      |
+| POST   | /tournaments/:id/decay-elo             | Decay Elo scores for a league or ladder            |
 
 Lifecycle notes:
 
@@ -108,17 +110,18 @@ Lifecycle notes:
 - Paginated list responses keep the existing array body shape and expose metadata through the `X-Page`, `X-Limit`, `X-Total-Count`, and `X-Total-Pages` response headers.
 - `PATCH /tournaments/:id` supports `name`, `size` for pending elimination tournaments, and `status: "archived"` for non-active tournaments.
 - `POST /tournaments/:id/participants` accepts an optional `seed`, and `PATCH /tournaments/:id/participants/:participant_id` lets organizers adjust seeds while the tournament is still pending.
-- Single-elimination and double-elimination `start` use bracket seeding placement instead of randomizing entrants, and round-robin/league setup respects the explicit seed order when generating fixtures.
+- Single-elimination and double-elimination `start` use bracket seeding placement instead of randomizing entrants, round-robin/league setup respects the explicit seed order when generating fixtures, and ladder `start` simply opens the tournament for ad hoc match entry.
 - Double-elimination tournaments require a full power-of-two field before they can start, track winners/losers/finals bracket segments on matches, and support a grand-final reset when the losers-bracket finalist wins the first final.
 - `GET /tournaments/latest` skips archived tournaments.
 - `GET /tournaments/:id/standings` works for every tournament type and exposes the tie-break order used for ranking.
-- `PATCH /tournaments/:id/matches/:match_id` now supports scheduling metadata (`scheduled_at`, `location`, `notes`), scores, draws for round-robin/league play, and forfeits.
+- `PATCH /tournaments/:id/matches/:match_id` now supports scheduling metadata (`scheduled_at`, `location`, `notes`), scores, draws for round-robin/league/ladder play, and forfeits.
 - `POST /tournaments/:id/reset` deletes existing matches, clears the winner, and returns the tournament to `pending`.
 - `DELETE /tournaments/:id` and `POST /tournaments/:id/reset` reject in-progress tournaments.
 - League tournaments now generate a full round-robin fixture list on `POST /tournaments/:id/start` and automatically complete when the last scheduled fixture is reported.
 - League standings and winners are now decided by season results (`wins`, head-to-head group wins, then Sonneborn-Berger), not by manually ending the season based on current Elo.
-- `POST /tournaments/:id/matches` is no longer the normal league flow; once scheduled fixtures exist, ad hoc match creation is rejected.
-- `POST /tournaments/:id/matches/:match_id/correct` is the safe correction flow for league matches. It rolls back the stored Elo snapshot for that match and rejects corrections once later related matches have been completed.
+- Ladder tournaments keep the ongoing manual-match flow: `POST /tournaments/:id/start` creates no fixtures, standings rank by current participant Elo, and ad hoc matches can be created throughout the active ladder.
+- `POST /tournaments/:id/matches` is no longer the normal league flow; once scheduled fixtures exist, ad hoc league match creation is rejected, but ladder tournaments continue to allow it.
+- `POST /tournaments/:id/matches/:match_id/correct` is the safe correction flow for league and ladder matches. It rolls back the stored Elo snapshot for that match and rejects corrections once later related matches have been completed.
 - Round robin winners are now persisted from computed standings using head-to-head group wins, and Swiss winners use standings tie-breaks (`wins`, `buchholz`, `sonneborn_berger`, direct head-to-head for two-way ties, then fewer byes).
 - Bracket HTML and image renders are cached in-process per tournament state, so repeated requests for unchanged brackets avoid rerendering.
 

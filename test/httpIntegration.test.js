@@ -178,6 +178,7 @@ test('GET /tournaments/:id/standings exposes standings metadata for every tourna
     { type: 'round_robin', size: 2 },
     { type: 'swiss', size: 2 },
     { type: 'league' },
+    { type: 'ladder' },
   ];
 
   for (const fixture of tournamentFixtures) {
@@ -696,6 +697,117 @@ test('league start generates a scheduled season and league completion is automat
   assert.equal(standings.standings[0].isWinner, true);
 });
 
+test('ladder start opens manual play without generating scheduled fixtures and ranks standings by participant Elo', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Ladder ${Date.now()}`,
+    type: 'ladder',
+  });
+
+  const members = await Promise.all([
+    createMember(`Ladder One ${Date.now()}`),
+    createMember(`Ladder Two ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const initialMatches = await getMatches(tournament.id);
+  assert.equal(initialMatches.length, 0);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsResponse.statusCode, 200);
+
+  const participants = participantsResponse.json();
+
+  const createMatchResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches`,
+    payload: {
+      participant1: participants[0].id,
+      participant2: participants[1].id,
+    },
+  });
+
+  assert.equal(createMatchResponse.statusCode, 201);
+
+  const createdMatch = createMatchResponse.json();
+  const resultResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${createdMatch.id}`,
+    payload: { winner_id: createdMatch.player2.id },
+  });
+  assert.equal(resultResponse.statusCode, 200);
+
+  const standings = await getStandings(tournament.id);
+  assert.equal(standings.tieBreakOrder[0], 'elo');
+  assert.equal(standings.standings[0].participantId, createdMatch.player2.id);
+  assert.ok(standings.standings[0].currentElo > standings.standings[1].currentElo);
+
+  const refreshedTournament = await models.Tournament.findByPk(tournament.id);
+  assert.equal(refreshedTournament.status, 'in_progress');
+  assert.equal(refreshedTournament.winnerId, null);
+});
+
+test('ladder tournaments allow repeated manual matches after earlier results are completed', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Ladder Replay ${Date.now()}`,
+    type: 'ladder',
+  });
+
+  const members = await Promise.all([
+    createMember(`Ladder Replay One ${Date.now()}`),
+    createMember(`Ladder Replay Two ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsResponse.statusCode, 200);
+
+  const participants = participantsResponse.json();
+
+  const firstMatchResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches`,
+    payload: {
+      participant1: participants[0].id,
+      participant2: participants[1].id,
+    },
+  });
+  assert.equal(firstMatchResponse.statusCode, 201);
+
+  const firstMatch = firstMatchResponse.json();
+  const firstResultResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${firstMatch.id}`,
+    payload: { winner_id: firstMatch.player1.id },
+  });
+  assert.equal(firstResultResponse.statusCode, 200);
+
+  const secondMatchResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches`,
+    payload: {
+      participant1: participants[0].id,
+      participant2: participants[1].id,
+    },
+  });
+  assert.equal(secondMatchResponse.statusCode, 201);
+});
+
 test('POST /tournaments/:id/decay-elo decays only participants with completed league activity', async () => {
   const tournament = await createTournament({
     name: `HTTP League Decay ${Date.now()}`,
@@ -891,6 +1003,78 @@ test('POST /tournaments/:id/matches/:match_id/correct safely corrects a complete
   const correctedWinner = participants.find((participant) => participant.id === match.player2.id);
   const correctedLoser = participants.find((participant) => participant.id === match.player1.id);
   assert.ok(correctedWinner.elo > correctedLoser.elo);
+});
+
+test('POST /tournaments/:id/matches/:match_id/correct safely corrects a completed ladder result', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Ladder Correction ${Date.now()}`,
+    type: 'ladder',
+  });
+
+  const members = await Promise.all([
+    createMember(`Ladder Correct One ${Date.now()}`),
+    createMember(`Ladder Correct Two ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsResponse.statusCode, 200);
+
+  const participants = participantsResponse.json();
+  const matchResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches`,
+    payload: {
+      participant1: participants[0].id,
+      participant2: participants[1].id,
+    },
+  });
+  assert.equal(matchResponse.statusCode, 201);
+
+  const match = matchResponse.json();
+  const initialResultResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${match.id}`,
+    payload: {
+      winner_id: match.player1.id,
+      player1_score: 2,
+      player2_score: 0,
+    },
+  });
+  assert.equal(initialResultResponse.statusCode, 200);
+
+  const correctionResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches/${match.id}/correct`,
+    payload: {
+      winner_id: match.player2.id,
+      player1_score: 1,
+      player2_score: 2,
+      correction_reason: 'Result was entered backward',
+    },
+  });
+
+  assert.equal(correctionResponse.statusCode, 200);
+
+  const correctedMatch = correctionResponse.json();
+  assert.equal(correctedMatch.winner.id, match.player2.id);
+  assert.equal(correctedMatch.correctionCount, 1);
+  assert.equal(correctedMatch.correctionReason, 'Result was entered backward');
+
+  const refreshedTournament = await models.Tournament.findByPk(tournament.id);
+  assert.equal(refreshedTournament.status, 'in_progress');
+  assert.equal(refreshedTournament.winnerId, null);
+
+  const refreshedStandings = await getStandings(tournament.id);
+  assert.equal(refreshedStandings.standings[0].participantId, match.player2.id);
 });
 
 test('POST /tournaments/:id/matches/:match_id/correct rejects league corrections once later related matches are completed', async () => {

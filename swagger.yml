@@ -128,6 +128,7 @@ paths:
               - round_robin
               - swiss
               - league
+              - ladder
           description: Filter tournaments by type
         - in: query
           name: page
@@ -184,6 +185,7 @@ paths:
                     - round_robin
                     - swiss
                     - league
+                    - ladder
                 size:
                   type: integer
                   description: Required for double_elimination and single_elimination (must be power of 2)
@@ -640,7 +642,7 @@ paths:
           description: Tournament not found
 
     post:
-      summary: Create a manual match when no scheduled league fixtures exist
+      summary: Create a manual ladder match or a league match when no scheduled fixtures exist
       parameters:
         - in: path
           name: id
@@ -693,7 +695,7 @@ paths:
                   player2Id:
                     type: integer
         '400':
-          description: Manual match creation is only supported for league tournaments
+          description: Manual match creation is only supported for league and ladder tournaments
         '409':
           description: Scheduled league fixtures already exist
         '404':
@@ -730,7 +732,7 @@ paths:
                   description: Winning participant id for the match
                 is_draw:
                   type: boolean
-                  description: Marks the result as a draw for round-robin or league matches
+                  description: Marks the result as a draw for round-robin, league, or ladder matches
                 forfeit_by_participant_id:
                   type: integer
                   description: Participant id that forfeited the match
@@ -782,7 +784,7 @@ paths:
 
   /tournaments/{id}/matches/{match_id}/correct:
     post:
-      summary: Safely correct a completed league match result
+      summary: Safely correct a completed league or ladder match result
       parameters:
         - in: path
           name: id
@@ -890,7 +892,7 @@ paths:
 
   /tournaments/{id}/decay-elo:
     post:
-      summary: Decay Elo scores for a league
+      summary: Decay Elo scores for a league or ladder
       parameters:
         - in: path
           name: id

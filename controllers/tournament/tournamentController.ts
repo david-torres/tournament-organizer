@@ -21,6 +21,7 @@ const MATCH_GENERATORS = {
   round_robin: generateRoundRobinMatches,
   swiss: generateSwissMatches,
   league: generateLeagueMatches,
+  ladder: () => null,
 };
 const INITIAL_PARTICIPANT_ELO = 1200;
 const ARCHIVED_TOURNAMENT_STATUS = 'archived';

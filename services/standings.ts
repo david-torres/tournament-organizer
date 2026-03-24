@@ -1,6 +1,7 @@
 export {};
 
 const { isMatchCompleted, isMatchDraw } = require('./matchState');
+const PARTICIPANT_ELO_TOURNAMENT_TYPES = new Set(['league', 'ladder']);
 
 function normalizeParticipant(participant) {
   if (participant && typeof participant.get === 'function') {
@@ -161,7 +162,7 @@ function buildBaseStandings(tournament, participants, matches) {
         + drawnOpponents.reduce((total, opponentId) => total + ((pointsByParticipantId.get(opponentId) || 0) / 2), 0),
       miniLeaguePoints: 0,
       lastCompletedRound: participantMatches.reduce((latestRound, match) => Math.max(latestRound, match.round || 0), 0),
-      currentElo: tournament.type === 'league'
+      currentElo: PARTICIPANT_ELO_TOURNAMENT_TYPES.has(tournament.type)
         ? participant.elo ?? null
         : member?.elo ?? participant.elo ?? null,
       isWinner: tournament.winnerId === participant.id,
@@ -181,6 +182,14 @@ function sortDoubleEliminationStandings(records) {
     compareNumbersDesc(leftRecord.wins, rightRecord.wins)
     || compareNumbersAsc(leftRecord.losses, rightRecord.losses)
     || compareNumbersDesc(leftRecord.lastCompletedRound, rightRecord.lastCompletedRound)
+    || compareParticipantIds(leftRecord, rightRecord));
+}
+
+function sortLadderStandings(records) {
+  return [...records].sort((leftRecord, rightRecord) =>
+    compareNumbersDesc(leftRecord.currentElo ?? 0, rightRecord.currentElo ?? 0)
+    || compareNumbersDesc(leftRecord.wins, rightRecord.wins)
+    || compareNumbersDesc(leftRecord.matchesPlayed, rightRecord.matchesPlayed)
     || compareParticipantIds(leftRecord, rightRecord));
 }
 
@@ -267,6 +276,7 @@ function getTieBreakOrder(type) {
     round_robin: ['points', 'head_to_head_group_points', 'sonneborn_berger', 'participant_id'],
     swiss: ['wins', 'buchholz', 'sonneborn_berger', 'head_to_head_if_two_way_tie', 'fewer_byes', 'participant_id'],
     league: ['points', 'head_to_head_group_points', 'sonneborn_berger', 'participant_id'],
+    ladder: ['elo', 'wins', 'matches_played', 'participant_id'],
   };
 
   return tieBreakOrderByType[type] || ['participant_id'];
@@ -284,6 +294,8 @@ function rankStandingsByType(tournament, standings, matches) {
       return sortSwissStandings(standings, matches);
     case 'league':
       return sortRoundRobinStandings(standings, matches);
+    case 'ladder':
+      return sortLadderStandings(standings);
     default:
       return [...standings].sort(compareParticipantIds);
   }
