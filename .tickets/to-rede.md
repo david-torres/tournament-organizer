@@ -1,6 +1,6 @@
 ---
 id: to-rede
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-03-23T19:29:25Z

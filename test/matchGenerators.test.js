@@ -74,21 +74,46 @@ test('assignEffectiveSeeds fills unseeded participants after explicit seeds', ()
 test('generateSwissMatches assigns one bye and avoids rematches in later rounds', () => {
   const participants = makeParticipants(5);
   const roundOne = generateSwissMatches(participants);
+  const roundOneCompletedMatches = roundOne.map((match) => ({
+    ...match,
+    winnerId: match.player1Id,
+  }));
 
   const byes = roundOne.filter((match) => match.player2Id === null);
   assert.equal(byes.length, 1);
   assert.equal(byes[0].player1Id, 1);
 
-  const roundTwo = generateSwissMatches(participants, [
-    { round: 1, winnerId: 1 },
-    { round: 1, winnerId: 2 },
-  ]);
+  const roundTwo = generateSwissMatches(participants, roundOneCompletedMatches);
 
   const roundOnePairs = new Set(roundOne.filter((match) => match.player2Id !== null).map(normalizePair));
   const roundTwoPairs = roundTwo.filter((match) => match.player2Id !== null).map(normalizePair);
 
   for (const pair of roundTwoPairs) {
     assert.ok(!roundOnePairs.has(pair), `unexpected rematch: ${pair}`);
+  }
+});
+
+test('generateSwissMatches uses actual historical pairings across multiple completed rounds', () => {
+  const participants = makeParticipants(8);
+  const historicalMatches = [
+    { round: 1, player1Id: 8, player2Id: 7, winnerId: 8 },
+    { round: 1, player1Id: 6, player2Id: 5, winnerId: 6 },
+    { round: 1, player1Id: 4, player2Id: 3, winnerId: 4 },
+    { round: 1, player1Id: 2, player2Id: 1, winnerId: 2 },
+    { round: 2, player1Id: 8, player2Id: 6, winnerId: 8 },
+    { round: 2, player1Id: 4, player2Id: 2, winnerId: 4 },
+    { round: 2, player1Id: 7, player2Id: 5, winnerId: 7 },
+    { round: 2, player1Id: 3, player2Id: 1, winnerId: 3 },
+  ];
+
+  const roundThree = generateSwissMatches(participants, historicalMatches);
+
+  assert.equal(roundThree.length, 4);
+  assert.ok(roundThree.every((match) => match.round === 3));
+
+  const historicalPairs = new Set(historicalMatches.map(normalizePair));
+  for (const match of roundThree) {
+    assert.ok(!historicalPairs.has(normalizePair(match)), `unexpected rematch: ${normalizePair(match)}`);
   }
 });
 

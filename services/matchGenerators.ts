@@ -12,6 +12,18 @@ function normalizeParticipants(participants) {
   return participants.map(normalizeParticipant);
 }
 
+function normalizeMatch(match) {
+  if (match && typeof match.get === 'function') {
+    return match.get({ plain: true });
+  }
+
+  return match;
+}
+
+function normalizeMatches(matches) {
+  return matches.map(normalizeMatch);
+}
+
 function compareParticipantsBySetupOrder(leftParticipant, rightParticipant) {
   const leftSeed = leftParticipant.seed;
   const rightSeed = rightParticipant.seed;
@@ -123,38 +135,52 @@ function sortSwissParticipants(participants, existingMatches) {
 }
 
 function pairWithoutRematches(participants, blockedPairs) {
-  if (participants.length === 0) {
-    return [];
-  }
+  const memo = new Map();
 
-  const [firstParticipant, ...remainingParticipants] = participants;
-
-  for (let index = 0; index < remainingParticipants.length; index++) {
-    const secondParticipant = remainingParticipants[index];
-    const pairKey = getPairKey(firstParticipant.id, secondParticipant.id);
-
-    if (blockedPairs.has(pairKey)) {
-      continue;
+  function search(remainingParticipants) {
+    if (remainingParticipants.length === 0) {
+      return [];
     }
 
-    const nextParticipants = [
-      ...remainingParticipants.slice(0, index),
-      ...remainingParticipants.slice(index + 1),
-    ];
-    const restOfPairs = pairWithoutRematches(nextParticipants, blockedPairs);
+    const memoKey = remainingParticipants.map((participant) => participant.id).join(',');
+    if (memo.has(memoKey)) {
+      return memo.get(memoKey);
+    }
 
-    if (restOfPairs) {
-      return [
-        {
-          player1Id: firstParticipant.id,
-          player2Id: secondParticipant.id,
-        },
-        ...restOfPairs,
+    const [firstParticipant, ...otherParticipants] = remainingParticipants;
+
+    for (let index = 0; index < otherParticipants.length; index++) {
+      const secondParticipant = otherParticipants[index];
+      const pairKey = getPairKey(firstParticipant.id, secondParticipant.id);
+
+      if (blockedPairs.has(pairKey)) {
+        continue;
+      }
+
+      const nextParticipants = [
+        ...otherParticipants.slice(0, index),
+        ...otherParticipants.slice(index + 1),
       ];
+      const restOfPairs = search(nextParticipants);
+
+      if (restOfPairs) {
+        const pairings = [
+          {
+            player1Id: firstParticipant.id,
+            player2Id: secondParticipant.id,
+          },
+          ...restOfPairs,
+        ];
+        memo.set(memoKey, pairings);
+        return pairings;
+      }
     }
+
+    memo.set(memoKey, null);
+    return null;
   }
 
-  return null;
+  return search(participants);
 }
 
 function toRoundMatches(round, pairings) {
@@ -165,8 +191,9 @@ function toRoundMatches(round, pairings) {
 }
 
 function generateSwissRound(participants, existingMatches = [], blockedPairs = new Set()) {
-  const sortedParticipants = sortSwissParticipants(participants, existingMatches);
-  const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((match) => match.round)) + 1 : 1;
+  const normalizedMatches = normalizeMatches(existingMatches);
+  const sortedParticipants = sortSwissParticipants(participants, normalizedMatches);
+  const currentRound = normalizedMatches.length > 0 ? Math.max(...normalizedMatches.map((match) => match.round)) + 1 : 1;
   const blockedPairKeys = new Set(blockedPairs);
 
   if (sortedParticipants.length % 2 !== 0) {
@@ -202,19 +229,15 @@ function generateSwissRound(participants, existingMatches = [], blockedPairs = n
   return toRoundMatches(currentRound, pairings);
 }
 
-function buildSwissBlockedPairs(participants, existingMatches, currentRound) {
+function buildSwissBlockedPairs(existingMatches) {
   const blockedPairs = new Set();
+  const normalizedMatches = normalizeMatches(existingMatches);
 
-  for (let round = 1; round < currentRound; round++) {
-    const historicalMatches = existingMatches.filter((match) => match.round < round);
-    const roundMatches = generateSwissRound(participants, historicalMatches, blockedPairs);
-
-    roundMatches.forEach((match) => {
-      if (match.player2Id !== null) {
-        blockedPairs.add(getPairKey(match.player1Id, match.player2Id));
-      }
-    });
-  }
+  normalizedMatches.forEach((match) => {
+    if (match.player1Id != null && match.player2Id != null) {
+      blockedPairs.add(getPairKey(match.player1Id, match.player2Id));
+    }
+  });
 
   return blockedPairs;
 }
@@ -278,9 +301,9 @@ function generateLeagueMatches(participants) {
 }
 
 function generateSwissMatches(participants, existingMatches = []) {
-  const currentRound = existingMatches.length > 0 ? Math.max(...existingMatches.map((match) => match.round)) + 1 : 1;
-  const blockedPairs = buildSwissBlockedPairs(participants, existingMatches, currentRound);
-  return generateSwissRound(participants, existingMatches, blockedPairs);
+  const normalizedMatches = normalizeMatches(existingMatches);
+  const blockedPairs = buildSwissBlockedPairs(normalizedMatches);
+  return generateSwissRound(participants, normalizedMatches, blockedPairs);
 }
 
 module.exports = {
