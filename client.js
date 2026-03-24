@@ -1,116 +1,254 @@
 const TOURNAMENT_API_URL = process.env.TOURNAMENT_API_URL || 'http://localhost:3000';
 
-async function apiCall(endpoint, method = 'GET', body = null) {
-  const options = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  };
+function buildQueryString(params = {}) {
+  const searchParams = new URLSearchParams();
 
-  if (body) {
-    options.body = JSON.stringify(body);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+
+    searchParams.append(key, String(value));
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
+async function parseResponseBody(response, responseType = 'auto') {
+  if (response.status === 204) {
+    return null;
   }
 
-  const response = await fetch(`${TOURNAMENT_API_URL}${endpoint}`, options);
+  if (responseType === 'buffer') {
+    const buffer = await response.arrayBuffer();
+    return Buffer.from(buffer);
+  }
 
-  // Check if the response status code indicates an error.
+  if (responseType === 'text') {
+    return response.text();
+  }
+
+  if (responseType === 'json') {
+    return response.json();
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  if (contentType.startsWith('text/')) {
+    return response.text();
+  }
+
+  const buffer = await response.arrayBuffer();
+  return Buffer.from(buffer);
+}
+
+async function getErrorMessage(response) {
+  try {
+    const payload = await parseResponseBody(response);
+
+    if (payload && typeof payload === 'object' && 'error' in payload) {
+      return payload.error;
+    }
+
+    if (typeof payload === 'string' && payload.length > 0) {
+      return payload;
+    }
+  } catch (error) {
+    // Fall through to the generic message when the error body cannot be parsed.
+  }
+
+  return 'An error occurred';
+}
+
+async function apiCall(endpoint, options = {}) {
+  const {
+    method = 'GET',
+    body,
+    query,
+    responseType = 'auto',
+  } = options;
+  const requestOptions = {
+    method,
+    headers: {},
+  };
+
+  if (body !== undefined && body !== null) {
+    requestOptions.headers['Content-Type'] = 'application/json';
+    requestOptions.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(`${TOURNAMENT_API_URL}${endpoint}${buildQueryString(query)}`, requestOptions);
+
   if (!response.ok) {
-    const json = await response.json();
-    const errorMessage = json.error || 'An error occurred';
-    const error = new Error(errorMessage);
+    const error = new Error(await getErrorMessage(response));
     error.status = response.status;
     throw error;
   }
 
-  const result = await response.json();
-  return result;
+  return parseResponseBody(response, responseType);
 }
 
-async function getMembers() {
-  const response = await apiCall(`/members`);
-  return response;
+async function getMembers(params = {}) {
+  return apiCall('/members', { query: params });
 }
 
-async function searchMembers(name) {
-  const response = await apiCall(`/members/search?name=${name}`);
-  return response;
+async function searchMembers(name, params = {}) {
+  return apiCall('/members/search', { query: { name, ...params } });
 }
 
 async function createMember(name) {
-  const response = await apiCall('/members', 'POST', { name });
-  return response;
+  return apiCall('/members', {
+    method: 'POST',
+    body: { name },
+  });
+}
+
+async function getTournaments(params = {}) {
+  return apiCall('/tournaments', { query: params });
 }
 
 async function getLatestTournament() {
-  const response = await apiCall('/tournaments/latest');
-  return response;
+  return apiCall('/tournaments/latest');
+}
+
+async function getTournament(tournament_id) {
+  return apiCall(`/tournaments/${tournament_id}`);
 }
 
 async function createTournament(name, type, size) {
-  const response = await apiCall('/tournaments', 'POST', { name, type, size });
-  return response;
+  return apiCall('/tournaments', {
+    method: 'POST',
+    body: { name, type, size },
+  });
+}
+
+async function updateTournament(tournament_id, updates) {
+  return apiCall(`/tournaments/${tournament_id}`, {
+    method: 'PATCH',
+    body: updates,
+  });
+}
+
+async function resetTournament(tournament_id) {
+  return apiCall(`/tournaments/${tournament_id}/reset`, {
+    method: 'POST',
+  });
+}
+
+async function deleteTournament(tournament_id) {
+  return apiCall(`/tournaments/${tournament_id}`, {
+    method: 'DELETE',
+  });
 }
 
 async function endTournament(tournament_id) {
-  const response = await apiCall(`/tournaments/${tournament_id}/league`, 'POST');
-  return response;
+  return apiCall(`/tournaments/${tournament_id}/league`, {
+    method: 'POST',
+  });
 }
 
 async function startTournament(tournament_id) {
-  const response = await apiCall(`/tournaments/${tournament_id}/start`, 'POST');
-  return response;
+  return apiCall(`/tournaments/${tournament_id}/start`, {
+    method: 'POST',
+  });
 }
 
-async function getBracket(tournament_id, format) {
-  const response = await apiCall(`/tournaments/${tournament_id}/bracket?format=${format}`);
-  return response;
+async function getBracket(tournament_id, format = 'json') {
+  const responseType = format === 'image' ? 'buffer' : format === 'html' ? 'text' : 'json';
+
+  return apiCall(`/tournaments/${tournament_id}/bracket`, {
+    query: { format },
+    responseType,
+  });
 }
 
-async function addParticipant(tournament_id, member_id) {
-  const response = await apiCall(`/tournaments/${tournament_id}/participants`, 'POST', { member_id });
-  return response;
+async function addParticipant(tournament_id, member_id, options = {}) {
+  return apiCall(`/tournaments/${tournament_id}/participants`, {
+    method: 'POST',
+    body: { member_id, ...options },
+  });
 }
 
-async function getParticipants(tournament_id) {
-  const response = await apiCall(`/tournaments/${tournament_id}/participants`);
-  return response;
+async function getParticipants(tournament_id, params = {}) {
+  return apiCall(`/tournaments/${tournament_id}/participants`, {
+    query: params,
+  });
+}
+
+async function updateParticipant(tournament_id, participant_id, updates) {
+  return apiCall(`/tournaments/${tournament_id}/participants/${participant_id}`, {
+    method: 'PATCH',
+    body: updates,
+  });
+}
+
+async function getStandings(tournament_id) {
+  return apiCall(`/tournaments/${tournament_id}/standings`);
 }
 
 async function getMatches(tournament_id, params = {}) {
-  const qs = '?' + new URLSearchParams(params).toString()
-  const response = await apiCall(`/tournaments/${tournament_id}/matches${qs}`);
-  return response;
+  return apiCall(`/tournaments/${tournament_id}/matches`, {
+    query: params,
+  });
 }
 
-async function updateMatch(tournament_id, match_id, winner_id) {
-  const response = await apiCall(`/tournaments/${tournament_id}/matches/${match_id}`, 'PATCH', { winner_id });
-  return response;
+async function createMatch(tournament_id, participant1, participant2, options = {}) {
+  return apiCall(`/tournaments/${tournament_id}/matches`, {
+    method: 'POST',
+    body: { participant1, participant2, ...options },
+  });
 }
 
-async function createMatch(tournament_id, participant1, participant2) {
-  const response = await apiCall(`/tournaments/${tournament_id}/matches`, 'POST', { participant1, participant2 });
-  return response;
+async function updateMatch(tournament_id, match_id, updatesOrWinnerId) {
+  const body = typeof updatesOrWinnerId === 'object' && updatesOrWinnerId !== null
+    ? updatesOrWinnerId
+    : { winner_id: updatesOrWinnerId };
+
+  return apiCall(`/tournaments/${tournament_id}/matches/${match_id}`, {
+    method: 'PATCH',
+    body,
+  });
+}
+
+async function correctMatchResult(tournament_id, match_id, updates) {
+  return apiCall(`/tournaments/${tournament_id}/matches/${match_id}/correct`, {
+    method: 'POST',
+    body: updates,
+  });
 }
 
 async function decayElo(tournament_id) {
-  const response = await apiCall(`/tournaments/${tournament_id}/decay-elo`, 'POST');
-  return response;
+  return apiCall(`/tournaments/${tournament_id}/decay-elo`, {
+    method: 'POST',
+  });
 }
 
 module.exports = {
-  getMembers,
-  searchMembers,
+  addParticipant,
+  correctMatchResult,
+  createMatch,
   createMember,
-  getLatestTournament,
   createTournament,
-  startTournament,
+  decayElo,
+  deleteTournament,
   endTournament,
   getBracket,
-  addParticipant,
-  getParticipants,
+  getLatestTournament,
   getMatches,
-  createMatch,
+  getMembers,
+  getParticipants,
+  getStandings,
+  getTournament,
+  getTournaments,
+  resetTournament,
+  searchMembers,
+  startTournament,
   updateMatch,
-  decayElo,
+  updateParticipant,
+  updateTournament,
 };
