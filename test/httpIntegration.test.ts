@@ -121,6 +121,16 @@ test.beforeEach(async () => {
   await models.sequelize.sync({ force: true });
 });
 
+test('GET /health returns an ok payload for platform health checks', async () => {
+  const response = await inject(app, {
+    method: 'GET',
+    url: '/health',
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { status: 'ok' });
+});
+
 test('GET /tournaments lists tournaments and GET /tournaments/:id returns a single tournament', async () => {
   const firstTournament = await createTournament({
     name: `HTTP List One ${Date.now()}`,

@@ -11,6 +11,9 @@ function createApp() {
   app.use(morgan('combined'));
   app.use(bodyParser.json());
   app.use(bodyParser.urlencoded({ extended: true }));
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
 
   routes(app);
 
