@@ -33,12 +33,40 @@ async function authenticateDatabase() {
   await sequelize.authenticate();
 }
 
+function shouldRepairStaleSqliteSchema(error, options = {}) {
+  if (runtimeConfig.dialect !== 'sqlite' || config.env !== 'development') {
+    return false;
+  }
+
+  if (options.force || options.alter) {
+    return false;
+  }
+
+  const message = error?.original?.message || error?.message || '';
+  return /SQLITE_ERROR:\s*no such column:/i.test(message);
+}
+
 async function syncDatabase(options = {}) {
-  await sequelize.sync(options);
+  try {
+    await sequelize.sync(options);
+  } catch (error) {
+    if (!shouldRepairStaleSqliteSchema(error, options)) {
+      throw error;
+    }
+
+    console.warn('Detected stale SQLite development schema. Retrying sync with alter to repair missing columns.');
+    await sequelize.sync({
+      ...options,
+      alter: {
+        drop: false,
+      },
+    });
+  }
 }
 
 module.exports = {
   ...db,
   authenticateDatabase,
+  shouldRepairStaleSqliteSchema,
   syncDatabase,
 };
