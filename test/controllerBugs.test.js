@@ -141,6 +141,120 @@ test('updateMatch rejects winners that are not part of the match with 400', asyn
   }
 });
 
+test('startTournament returns 400 when the atomic status transition loses the race', async () => {
+  const originalTransaction = models.sequelize.transaction;
+  const originalFindByPk = models.Tournament.findByPk;
+  const originalUpdate = models.Tournament.update;
+  const originalBulkCreate = models.Match.bulkCreate;
+
+  let bulkCreateCalled = false;
+
+  models.sequelize.transaction = async (callback) => callback({ LOCK: { UPDATE: 'UPDATE' } });
+  models.Tournament.findByPk = async () => ({
+    id: 11,
+    status: 'pending',
+    type: 'single_elimination',
+    participants: [
+      { id: 1 },
+      { id: 2 },
+    ],
+  });
+  models.Tournament.update = async () => [0];
+  models.Match.bulkCreate = async () => {
+    bulkCreateCalled = true;
+  };
+
+  try {
+    const req = {
+      params: {
+        id: '11',
+      },
+    };
+    const res = createRes();
+
+    await tournamentController.startTournament(req, res);
+
+    assert.equal(res.statusCode, 400);
+    assert.equal(bulkCreateCalled, false);
+  } finally {
+    models.sequelize.transaction = originalTransaction;
+    models.Tournament.findByPk = originalFindByPk;
+    models.Tournament.update = originalUpdate;
+    models.Match.bulkCreate = originalBulkCreate;
+  }
+});
+
+test('createMatch maps SQLITE_BUSY lock contention to 409', async () => {
+  const originalTransaction = models.sequelize.transaction;
+
+  models.sequelize.transaction = async () => {
+    throw new Error('SQLITE_BUSY: database is locked');
+  };
+
+  try {
+    const req = {
+      params: {
+        id: '5',
+      },
+      body: {
+        participant1: 1,
+        participant2: 2,
+      },
+    };
+    const res = createRes();
+
+    await matchController.createMatch(req, res);
+
+    assert.equal(res.statusCode, 409);
+    assert.match(res.body.error, /unresolved match/i);
+  } finally {
+    models.sequelize.transaction = originalTransaction;
+  }
+});
+
+test('updateMatch rejects replaying a completed match with 409', async () => {
+  const originalTransaction = models.sequelize.transaction;
+  const originalFindByPk = models.Tournament.findByPk;
+  const originalFindOne = models.Match.findOne;
+
+  models.sequelize.transaction = async (callback) => callback({ LOCK: { UPDATE: 'UPDATE' } });
+  models.Tournament.findByPk = async () => ({
+    id: 42,
+    type: 'league',
+    status: 'in_progress',
+    participants: [],
+    matches: [],
+  });
+  models.Match.findOne = async () => ({
+    id: 7,
+    winnerId: 1,
+    player1: { id: 1, member: { id: 1, elo: 1200 } },
+    player2: { id: 2, member: { id: 2, elo: 1200 } },
+  });
+
+  try {
+    const req = {
+      params: {
+        id: '42',
+        match_id: '7',
+      },
+      body: {
+        winner_id: 1,
+      },
+    };
+    const res = createRes();
+
+    await matchController.updateMatch(req, res);
+
+    assert.equal(res.statusCode, 409);
+    assert.match(res.body.error, /already been completed/i);
+  } finally {
+    models.sequelize.transaction = originalTransaction;
+    models.Tournament.findByPk = originalFindByPk;
+    models.Match.findOne = originalFindOne;
+  }
+});
+
 test('getBracket serializes a bye match without throwing', async () => {
   const originalFindByPk = models.Tournament.findByPk;
   const originalFindAll = models.Match.findAll;

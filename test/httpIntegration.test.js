@@ -206,3 +206,53 @@ test('GET /tournaments/:id/bracket?format=html renders swiss bye matches as HTML
   assert.match(bracketResponse.body, /BYE/);
   assert.match(bracketResponse.body, /Html One|Html Two|Html Three/);
 });
+
+test('PATCH /tournaments/:id/matches/:match_id rejects replaying a completed match', async () => {
+  const tournament = await createTournament({
+    name: `HTTP Match Replay ${Date.now()}`,
+    type: 'league',
+  });
+
+  const members = await Promise.all([
+    createMember(`Replay Winner ${Date.now()}`),
+    createMember(`Replay Loser ${Date.now()}`),
+  ]);
+
+  for (const member of members) {
+    await addParticipant(tournament.id, member.id);
+  }
+
+  await startTournament(tournament.id);
+
+  const participantsResponse = await inject(app, {
+    method: 'GET',
+    url: `/tournaments/${tournament.id}/participants`,
+  });
+  assert.equal(participantsResponse.statusCode, 200);
+
+  const participants = participantsResponse.json();
+  const createMatchResponse = await inject(app, {
+    method: 'POST',
+    url: `/tournaments/${tournament.id}/matches`,
+    payload: {
+      participant1: participants[0].id,
+      participant2: participants[1].id,
+    },
+  });
+  assert.equal(createMatchResponse.statusCode, 201);
+
+  const match = createMatchResponse.json();
+  const firstResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${match.id}`,
+    payload: { winner_id: match.player1.id },
+  });
+  assert.equal(firstResponse.statusCode, 200);
+
+  const secondResponse = await inject(app, {
+    method: 'PATCH',
+    url: `/tournaments/${tournament.id}/matches/${match.id}`,
+    payload: { winner_id: match.player1.id },
+  });
+  assert.equal(secondResponse.statusCode, 409);
+});

@@ -4,20 +4,22 @@ const { loadSourceModule } = require('../runtime/loadSourceModule');
 const { Match } = loadSourceModule('models');
 const { generateSwissMatches } = require('./matchGenerators');
 
-async function completeTournament(tournament, winnerParticipantId) {
+async function completeTournament(tournament, winnerParticipantId, options: any = {}) {
   await tournament.update({
     status: 'completed',
     winnerId: winnerParticipantId,
-  });
+  }, options);
 }
 
-async function advanceSingleElimination(tournament) {
+async function advanceSingleElimination(tournament, options: any = {}) {
   try {
+    const { transaction } = options;
     const matches = await Match.findAll({
       where: {
         tournamentId: tournament.id,
       },
       order: [['round', 'ASC']],
+      transaction,
     });
 
     const latestRound = matches[matches.length - 1].round;
@@ -31,7 +33,7 @@ async function advanceSingleElimination(tournament) {
 
       if (winners.length === 1) {
         console.log('All rounds complete.');
-        await completeTournament(tournament, winners[0]);
+        await completeTournament(tournament, winners[0], options);
         return;
       }
 
@@ -47,20 +49,22 @@ async function advanceSingleElimination(tournament) {
         });
       }
 
-      await Match.bulkCreate(newMatches);
+      await Match.bulkCreate(newMatches, { transaction });
     }
   } catch (error) {
     console.error(error);
   }
 }
 
-async function advanceRoundRobin(tournament) {
+async function advanceRoundRobin(tournament, options: any = {}) {
   try {
+    const { transaction } = options;
     const matches = await Match.findAll({
       where: {
         tournamentId: tournament.id,
       },
       order: [['round', 'DESC']],
+      transaction,
     });
 
     const latestRound = matches[0].round;
@@ -76,7 +80,7 @@ async function advanceRoundRobin(tournament) {
 
       if (latestRound === totalRounds) {
         console.log('All rounds complete. Tournament finished.');
-        await tournament.update({ status: 'completed' });
+        await tournament.update({ status: 'completed' }, { transaction });
       }
     }
   } catch (error) {
@@ -84,11 +88,13 @@ async function advanceRoundRobin(tournament) {
   }
 }
 
-async function advanceSwiss(tournament) {
+async function advanceSwiss(tournament, options: any = {}) {
   try {
+    const { transaction } = options;
     const matches = await Match.findAll({
       where: { tournamentId: tournament.id },
       order: [['round', 'DESC']],
+      transaction,
     });
 
     const participants = tournament.participants;
@@ -106,7 +112,7 @@ async function advanceSwiss(tournament) {
         }));
 
         playerScores.sort((a, b) => b.wins - a.wins || b.participant.elo - a.participant.elo);
-        await completeTournament(tournament, playerScores[0].participant.id);
+        await completeTournament(tournament, playerScores[0].participant.id, options);
         return;
       }
 
@@ -117,6 +123,7 @@ async function advanceSwiss(tournament) {
           winnerId: match.player2Id === null ? match.player1Id : match.winnerId ?? null,
           tournamentId: tournament.id,
         })),
+        { transaction },
       );
     }
   } catch (error) {

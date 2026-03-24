@@ -23,7 +23,7 @@ function isWinnerOneOfParticipants(target1, target2, winnerId) {
   return String(winnerId) === String(target1.id) || String(winnerId) === String(target2.id);
 }
 
-async function updateElo(target1, target2, winnerId) {
+async function updateElo(target1, target2, winnerId, options = {}) {
   if (!isWinnerOneOfParticipants(target1, target2, winnerId)) {
     throw new Error('Winner must be one of the match participants');
   }
@@ -32,8 +32,8 @@ async function updateElo(target1, target2, winnerId) {
   const actualScore2 = 1 - actualScore1;
   const [newElo1, newElo2] = calculateUpdatedElo(target1.elo, target2.elo, actualScore1, actualScore2);
 
-  await target1.update({ elo: newElo1 });
-  await target2.update({ elo: newElo2 });
+  await target1.update({ elo: newElo1 }, options);
+  await target2.update({ elo: newElo2 }, options);
 }
 
 function getDecaySettings(customDecaySettings) {

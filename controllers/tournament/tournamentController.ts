@@ -1,8 +1,8 @@
 export {};
 
-const { Op, UniqueConstraintError } = require('sequelize');
+const { Op, TimeoutError, UniqueConstraintError } = require('sequelize');
 const { loadSourceModule } = require('../../runtime/loadSourceModule');
-const { Tournament, Participant, Match, Member } = loadSourceModule('models');
+const { Tournament, Participant, Match, Member, sequelize } = loadSourceModule('models');
 const { isPowerOfTwo, decayElo: applyDecay } = require('../../utils');
 const {
   generateSingleEliminationMatches,
@@ -16,6 +16,10 @@ const MATCH_GENERATORS = {
   swiss: generateSwissMatches,
   league: () => null,
 };
+
+function isSqliteBusyError(error) {
+  return error?.parent?.code === 'SQLITE_BUSY' || error?.original?.code === 'SQLITE_BUSY' || error?.message?.includes('SQLITE_BUSY');
+}
 
 function getLeagueWinnerParticipantId(winnerParticipant) {
   return winnerParticipant.id;
@@ -110,34 +114,57 @@ async function getParticipants(req, res) {
 
 async function startTournament(req, res) {
   try {
-    const tournament = await Tournament.findByPk(req.params.id, {
-      include: { model: Participant, as: 'participants' },
+    const outcome = await sequelize.transaction(async (transaction) => {
+      const tournament = await Tournament.findByPk(req.params.id, {
+        include: { model: Participant, as: 'participants' },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (!tournament) {
+        return { status: 404, body: { error: 'Tournament not found' } };
+      }
+
+      if (tournament.status !== 'pending') {
+        return { status: 400, body: { error: 'Tournament has already been started' } };
+      }
+
+      const [updatedCount] = await Tournament.update(
+        { status: 'in_progress' },
+        {
+          where: {
+            id: tournament.id,
+            status: 'pending',
+          },
+          transaction,
+        },
+      );
+
+      if (updatedCount !== 1) {
+        return { status: 400, body: { error: 'Tournament has already been started' } };
+      }
+
+      const generator = MATCH_GENERATORS[tournament.type];
+      if (!generator) {
+        throw new Error('Invalid tournament type');
+      }
+
+      const matches = generator(tournament.participants);
+
+      if (matches) {
+        await Match.bulkCreate(getTournamentMatchesPayload(tournament, matches), { transaction });
+      }
+
+      return { status: 200, body: { message: 'Tournament started, matches generated' } };
     });
 
-    if (!tournament) {
-      return res.status(404).json({ error: 'Tournament not found' });
-    }
-
-    if (tournament.status !== 'pending') {
-      return res.status(400).json({ error: 'Tournament has already been started' });
-    }
-
-    const generator = MATCH_GENERATORS[tournament.type];
-    if (!generator) {
-      throw new Error('Invalid tournament type');
-    }
-
-    const matches = generator(tournament.participants);
-
-    if (matches) {
-      await Match.bulkCreate(getTournamentMatchesPayload(tournament, matches));
-    }
-
-    await tournament.update({ status: 'in_progress' });
-
-    res.status(200).json({ message: 'Tournament started, matches generated' });
+    res.status(outcome.status).json(outcome.body);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (error instanceof TimeoutError || isSqliteBusyError(error)) {
+      res.status(400).json({ error: 'Tournament has already been started' });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   }
 }
 
