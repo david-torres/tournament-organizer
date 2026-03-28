@@ -8,14 +8,35 @@ const MatchModel = require('./match');
 const config = require('../config/config');
 
 const runtimeConfig = config[config.env];
+const schema = runtimeConfig.dialect === 'postgres' && runtimeConfig.schema
+  ? runtimeConfig.schema
+  : undefined;
 
-const sequelize = new Sequelize(runtimeConfig.database, runtimeConfig.username, runtimeConfig.password, {
-  host: runtimeConfig.host,
-  port: runtimeConfig.port,
-  dialect: runtimeConfig.dialect,
-  logging: runtimeConfig.logging ? console.log : false,
-  storage: runtimeConfig.storage,
-});
+function buildSequelizeOptions() {
+  const options: any = {
+    host: runtimeConfig.host,
+    port: runtimeConfig.port,
+    dialect: runtimeConfig.dialect,
+    logging: runtimeConfig.logging ? console.log : false,
+    storage: runtimeConfig.storage,
+  };
+
+  if (schema) {
+    options.define = {
+      schema,
+    };
+    options.searchPath = schema;
+  }
+
+  return options;
+}
+
+const sequelize = new Sequelize(
+  runtimeConfig.database,
+  runtimeConfig.username,
+  runtimeConfig.password,
+  buildSequelizeOptions(),
+);
 
 const db = {
   sequelize,
@@ -78,6 +99,7 @@ async function syncDatabase(options: any = {}) {
 
 module.exports = {
   ...db,
+  buildSequelizeOptions,
   authenticateDatabase,
   shouldRepairStaleSchema,
   syncDatabase,

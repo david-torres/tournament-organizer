@@ -49,6 +49,7 @@ A REST API for creating and managing tournaments, participants, and matches, wit
     DB_NAME=your_database_name
     DB_HOST=localhost
     DB_PORT=5432
+    DB_SCHEMA=public
     DB_DIALECT=sqlite
     DB_STORAGE=./data/tournaments.db
     PORT=3000
@@ -61,6 +62,21 @@ A REST API for creating and managing tournaments, participants, and matches, wit
     DB_STORAGE=./data/tournaments.db
     PORT=3000
     ```
+
+    For Postgres or Supabase, switch the dialect and optionally set a schema:
+    ```
+    NODE_ENV=development
+    DB_DIALECT=postgres
+    DB_NAME=postgres
+    DB_HOST=aws-0-us-west-2.pooler.supabase.com
+    DB_PORT=6543
+    DB_SCHEMA=your_schema
+    DB_USERNAME=postgres.your-project-ref
+    DB_PASSWORD=your_db_password
+    PORT=3000
+    ```
+
+    `DB_SCHEMA` is optional. If omitted, Postgres uses its default schema search path, which is typically `public`.
 
 4. Initialize the database (optional, if starting fresh):
 

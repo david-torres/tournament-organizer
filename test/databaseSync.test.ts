@@ -80,6 +80,7 @@ test('shouldRepairStaleSchema retries column-missing postgres errors only when s
     DB_NAME: process.env.DB_NAME,
     DB_HOST: process.env.DB_HOST,
     DB_PORT: process.env.DB_PORT,
+    DB_SCHEMA: process.env.DB_SCHEMA,
     DB_USERNAME: process.env.DB_USERNAME,
     DB_PASSWORD: process.env.DB_PASSWORD,
     DB_LOGGING: process.env.DB_LOGGING,
@@ -90,6 +91,7 @@ test('shouldRepairStaleSchema retries column-missing postgres errors only when s
   process.env.DB_NAME = 'legacy';
   process.env.DB_HOST = '127.0.0.1';
   process.env.DB_PORT = '5432';
+  process.env.DB_SCHEMA = '';
   process.env.DB_USERNAME = 'postgres';
   process.env.DB_PASSWORD = 'postgres';
   process.env.DB_STORAGE = '';
@@ -145,6 +147,7 @@ test('syncDatabase repairs a stale development sqlite schema by retrying with al
     DB_NAME: process.env.DB_NAME,
     DB_HOST: process.env.DB_HOST,
     DB_PORT: process.env.DB_PORT,
+    DB_SCHEMA: process.env.DB_SCHEMA,
     DB_USERNAME: process.env.DB_USERNAME,
     DB_PASSWORD: process.env.DB_PASSWORD,
     DB_LOGGING: process.env.DB_LOGGING,
@@ -158,6 +161,7 @@ test('syncDatabase repairs a stale development sqlite schema by retrying with al
   process.env.DB_NAME = 'legacy';
   process.env.DB_HOST = '';
   process.env.DB_PORT = '';
+  process.env.DB_SCHEMA = '';
   process.env.DB_USERNAME = '';
   process.env.DB_PASSWORD = '';
   process.env.DB_LOGGING = 'false';
@@ -195,5 +199,54 @@ test('syncDatabase repairs a stale development sqlite schema by retrying with al
 
     resetRuntimeModules();
     await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('postgres DB_SCHEMA applies a default schema and searchPath for Sequelize models', { concurrency: false }, async () => {
+  const originalEnv = {
+    NODE_ENV: process.env.NODE_ENV,
+    DB_DIALECT: process.env.DB_DIALECT,
+    DB_STORAGE: process.env.DB_STORAGE,
+    DB_NAME: process.env.DB_NAME,
+    DB_HOST: process.env.DB_HOST,
+    DB_PORT: process.env.DB_PORT,
+    DB_SCHEMA: process.env.DB_SCHEMA,
+    DB_USERNAME: process.env.DB_USERNAME,
+    DB_PASSWORD: process.env.DB_PASSWORD,
+    DB_LOGGING: process.env.DB_LOGGING,
+  };
+
+  process.env.NODE_ENV = 'production';
+  process.env.DB_DIALECT = 'postgres';
+  process.env.DB_NAME = 'legacy';
+  process.env.DB_HOST = '127.0.0.1';
+  process.env.DB_PORT = '5432';
+  process.env.DB_SCHEMA = 'league_ops';
+  process.env.DB_USERNAME = 'postgres';
+  process.env.DB_PASSWORD = 'postgres';
+  process.env.DB_STORAGE = '';
+  process.env.DB_LOGGING = 'false';
+
+  resetRuntimeModules();
+
+  const models = require('../models');
+
+  try {
+    assert.equal(models.sequelize.options.searchPath, 'league_ops');
+    assert.equal(models.Member.getTableName().schema, 'league_ops');
+    assert.equal(models.Match.getTableName().schema, 'league_ops');
+    assert.equal(models.buildSequelizeOptions().define.schema, 'league_ops');
+  } finally {
+    await models.sequelize.close().catch(() => {});
+
+    Object.entries(originalEnv).forEach(([key, value]) => {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+
+    resetRuntimeModules();
   }
 });

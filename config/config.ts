@@ -12,6 +12,7 @@ function readRuntimeConfig(overrides = {}) {
     host: process.env.DB_HOST || '127.0.0.1',
     port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
     dialect: process.env.DB_DIALECT || 'sqlite',
+    schema: process.env.DB_SCHEMA || undefined,
     storage: process.env.DB_STORAGE || './data/tournaments.db',
     server_port: process.env.PORT ? Number(process.env.PORT) : 3000,
     logging: process.env.DB_LOGGING === 'true',
